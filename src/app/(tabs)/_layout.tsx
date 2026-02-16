@@ -86,22 +86,22 @@ export default function TabLayout() {
         }}
       />
 
-      {/* right side: mess, attendance */}
-      <MaterialBottomTabs.Screen
-        name="mess"
-        options={{
-          title: "Mess",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <Ionicons name="restaurant-outline" size={iconSize} color={color} />
-          ),
-        }}
-      />
+      {/* right side: attendance, mess */}
       <MaterialBottomTabs.Screen
         name="attendance"
         options={{
           title: "Bunks",
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <Ionicons name="calendar-outline" size={iconSize} color={color} />
+          ),
+        }}
+      />
+      <MaterialBottomTabs.Screen
+        name="mess"
+        options={{
+          title: "Mess",
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+            <Ionicons name="restaurant-outline" size={iconSize} color={color} />
           ),
         }}
       />
