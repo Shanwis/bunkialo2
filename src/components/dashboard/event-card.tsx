@@ -1,9 +1,11 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useBunkStore } from "@/stores/bunk-store";
+import { Toast } from "@/components";
 import type { TimelineEvent } from "@/types";
 import { extractCourseName } from "@/utils/course-name";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 
@@ -74,6 +76,27 @@ const formatTime = (timestamp: number): string => {
   });
 };
 
+const extractCourseIdFromUrl = (url: string): string | null => {
+  if (!url) return null;
+
+  const courseIdMatch = url.match(/[?&]course=(\d+)/);
+  if (courseIdMatch) return courseIdMatch[1];
+
+  const viewIdMatch = url.match(/\/course\/view\.php\?id=(\d+)/);
+  if (viewIdMatch) return viewIdMatch[1];
+
+  return null;
+};
+
+const resolveEventCourseId = (event: TimelineEvent): string | null => {
+  if (event.course?.id) return String(event.course.id);
+
+  const fromViewUrl = extractCourseIdFromUrl(event.course?.viewurl ?? "");
+  if (fromViewUrl) return fromViewUrl;
+
+  return extractCourseIdFromUrl(event.url ?? "");
+};
+
 export const EventCard = ({ event, isOverdue }: EventCardProps) => {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -102,6 +125,21 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
     Linking.openURL(event.url);
   };
 
+  const openCourseResources = () => {
+    const courseId = resolveEventCourseId(event);
+    if (!courseId) {
+      Toast.show("Could not resolve course for this event", {
+        type: "error",
+      });
+      return;
+    }
+
+    router.push({
+      pathname: "/course/[courseid]",
+      params: { courseid: courseId },
+    });
+  };
+
   useEffect(() => {
     const timer = setInterval(() => {
       setNowMs(Date.now());
@@ -110,7 +148,8 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
   }, []);
 
   return (
-    <View
+    <Pressable
+      onPress={openCourseResources}
       className="gap-3 rounded-2xl border p-4"
       style={{
         backgroundColor: theme.backgroundSecondary,
@@ -200,7 +239,10 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
                 : Colors.gray[50],
             borderColor: isPastDue ? Colors.status.danger + "66" : theme.border,
           })}
-          onPress={openOnLms}
+          onPress={(pressedEvent) => {
+            pressedEvent.stopPropagation();
+            openOnLms();
+          }}
         >
           <View className="flex-row items-center gap-1.5">
             <Text className="text-xs font-semibold" style={{ color: theme.text }}>
@@ -210,6 +252,6 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
           </View>
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 };

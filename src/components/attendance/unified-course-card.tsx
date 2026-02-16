@@ -1,4 +1,5 @@
 import { SwipeableBunkItem } from "@/components/attendance/swipeable-bunk-item";
+import { Toast } from "@/components";
 import { GradientCard } from "@/components/ui/gradient-card";
 import { CalendarTheme, Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -15,6 +16,7 @@ import type {
 } from "@/types";
 import { getRecordKeyVariants } from "@/utils/attendance-helpers";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import * as Linking from "expo-linking";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -374,6 +376,18 @@ export function UnifiedCourseCard({
     }
   };
 
+  const handleOpenResources = () => {
+    if (!course?.courseId) {
+      Toast.show("No LMS course id found for resources", { type: "error" });
+      return;
+    }
+
+    router.push({
+      pathname: "/course/[courseid]",
+      params: { courseid: course.courseId },
+    });
+  };
+
   // for custom courses with no bunks yet, still show the card
   if (!isCustomCourse && totalSessions === 0 && pastBunks.length === 0) {
     return (
@@ -502,6 +516,22 @@ export function UnifiedCourseCard({
             </View>
 
             <View className="flex-row items-center gap-2">
+              {!isCustomCourse && course?.courseId && (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleOpenResources();
+                  }}
+                  className="p-2"
+                >
+                  <Ionicons
+                    name="git-network-outline"
+                    size={18}
+                    color={theme.textSecondary}
+                  />
+                </Pressable>
+              )}
+
               {!isCustomCourse && course?.attendanceModuleId && (
                 <Pressable
                   onPress={(e) => {

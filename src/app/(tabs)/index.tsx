@@ -8,6 +8,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/stores/auth-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
+import { useLmsResourcesStore } from "@/stores/lms-resources-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { initializeNotifications } from "@/utils/notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -55,6 +56,10 @@ export default function DashboardScreen() {
     hasHydrated,
   } = useDashboardStore();
   const { isOffline, setOffline } = useAuthStore();
+  const {
+    hasHydrated: resourcesHydrated,
+    prefetchEnrolledCourseResources,
+  } = useLmsResourcesStore();
   const refreshIntervalMinutes = useSettingsStore(
     (state) => state.refreshIntervalMinutes,
   );
@@ -104,6 +109,21 @@ export default function DashboardScreen() {
       return () => task.cancel();
     }
   }, [hasHydrated]);
+
+  useEffect(() => {
+    if (!hasHydrated || !resourcesHydrated || isOffline) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      void prefetchEnrolledCourseResources();
+    });
+
+    return () => task.cancel();
+  }, [
+    hasHydrated,
+    isOffline,
+    prefetchEnrolledCourseResources,
+    resourcesHydrated,
+  ]);
 
   useEffect(() => {
     if (isOffline && lastSyncTime) {

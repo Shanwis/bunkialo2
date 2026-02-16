@@ -9,6 +9,7 @@ import { useAttendanceStore } from "@/stores/attendance-store";
 import { useAttendanceUIStore } from "@/stores/attendance-ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { selectAllDutyLeaves, useBunkStore } from "@/stores/bunk-store";
+import { useLmsResourcesStore } from "@/stores/lms-resources-store";
 import {
     computeUnknownCount,
     formatSyncTime,
@@ -40,6 +41,10 @@ export default function AttendanceScreen() {
     syncFromLms,
     hasHydrated: isBunkHydrated,
   } = useBunkStore();
+  const {
+    hasHydrated: resourcesHydrated,
+    prefetchEnrolledCourseResources,
+  } = useLmsResourcesStore();
 
   const {
     activeTab,
@@ -127,6 +132,21 @@ export default function AttendanceScreen() {
       setOffline(false);
     }
   }, [isOffline, lastSyncTime, setOffline]);
+
+  useEffect(() => {
+    if (!isAttendanceHydrated || !resourcesHydrated || isOffline) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      void prefetchEnrolledCourseResources();
+    });
+
+    return () => task.cancel();
+  }, [
+    isAttendanceHydrated,
+    isOffline,
+    prefetchEnrolledCourseResources,
+    resourcesHydrated,
+  ]);
 
   // close FAB on blur
   useFocusEffect(

@@ -123,6 +123,7 @@ export default function RootLayout() {
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="login" />
                 <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="course/[courseid]" />
                 <Stack.Screen name="faculty/[id]" />
                 <Stack.Screen name="settings" />
                 <Stack.Screen
