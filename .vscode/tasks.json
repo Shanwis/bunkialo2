@@ -109,6 +109,28 @@
         "panel": "new",
         "close": true
       }
+    },
+    {
+      "label": "Start Landing Dev",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Start-Process http://localhost:3000; bun run dev"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\bunkialo-landing"
+      },
+      "group": {
+        "kind": "build"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "close": false
+      }
     }
   ],
   "inputs": [

@@ -4,7 +4,13 @@ import { ArrowUpRight, QrCode } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { SiAndroid, SiApple, SiExpo, SiGoogleplay } from "react-icons/si";
+import {
+  SiAndroid,
+  SiApple,
+  SiExpo,
+  SiGithub,
+  SiGoogleplay,
+} from "react-icons/si";
 
 import { AnimatedLogo } from "@/components/landing/animated-logo";
 import { LandingSplash } from "@/components/landing/landing-splash";
@@ -35,6 +41,7 @@ const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.codialo.Bunkialo2";
 const EXPO_GO_IOS_APP_STORE_URL =
   "https://apps.apple.com/us/app/expo-go/id982107779";
+const GITHUB_REPO_URL = "https://github.com/Noelithub77/bunkialo2";
 const BUY_ME_COFFEE_UPI_URL =
   "upi://pay?pa=noelmcv7@oksbi&pn=Noel%20Georgi&tn=Support%20Bunkialo&cu=INR";
 const DEVELOPER_LINKEDIN_URL = "https://www.linkedin.com/in/noel-georgi/";
@@ -261,6 +268,33 @@ export function LandingShell({ expUrl, initialTab, qrUrl }: LandingShellProps) {
                 </motion.div>
               </TabsContent>
             </Tabs>
+
+            <motion.div
+              className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 sm:px-3.5"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                delay: shouldReduceMotion ? 0 : 0.22,
+                duration: 0.35,
+              }}
+            >
+              <p className="min-w-0 text-[11px] leading-relaxed text-white/64 sm:text-xs">
+                Open source,
+                <br />
+                Report bugs, request features, or contribute.
+              </p>
+              <a
+                href={GITHUB_REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open Bunkialo GitHub repository"
+                className="shrink-0 inline-flex h-8 items-center gap-1.5 rounded-full border border-white/20 bg-white/[0.06] px-3 text-[11px] font-medium text-white/88 shadow-[0_6px_16px_rgba(0,0,0,0.2)] transition-all duration-200 hover:-translate-y-px hover:border-white/35 hover:bg-white/[0.11] hover:text-white sm:text-xs"
+              >
+                <SiGithub className="size-3.5" />
+                {/* View repo */}
+                <ArrowUpRight className="size-3.5 opacity-80" />
+              </a>
+            </motion.div>
 
             <motion.div
               className="mt-auto rounded-xl border border-white/8 bg-white/[0.015] px-3.5 py-2.5 backdrop-blur-sm sm:px-3.5 sm:py-2.5"
