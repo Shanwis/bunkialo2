@@ -5,103 +5,19 @@
  */
 
 import { writeFileSync } from "fs";
+import { createLmsSession, loadEnvFromRoot } from "./utils/lms-session.mjs";
 
-const BASE_URL = "https://lmsug24.iiitkottayam.ac.in";
-const USERNAME = process.env.LMS_TEST_USERNAME;
-const PASSWORD = process.env.LMS_TEST_PASSWORD;
-
-if (!USERNAME || !PASSWORD) {
-  console.error(
-    "Missing LMS_TEST_USERNAME or LMS_TEST_PASSWORD. Set both env vars before running.",
-  );
-  process.exit(1);
-}
-
-const cheerio = await import("cheerio");
-const { CookieJar } = await import("tough-cookie");
-const jar = new CookieJar();
-
-async function fetchWithCookies(url, options = {}) {
-  const cookieHeader = await jar.getCookieString(url);
-
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    ...options.headers,
-  };
-
-  if (cookieHeader) headers["Cookie"] = cookieHeader;
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    redirect: "manual",
-  });
-
-  const setCookieHeaders = response.headers.getSetCookie?.() || [];
-  for (const cookie of setCookieHeaders) {
-    await jar.setCookie(cookie, url);
-  }
-
-  if (response.status >= 300 && response.status < 400) {
-    const location = response.headers.get("location");
-    if (location) {
-      const redirectUrl = location.startsWith("http")
-        ? location
-        : new URL(location, url).href;
-      return fetchWithCookies(redirectUrl, {
-        ...options,
-        method: "GET",
-        body: undefined,
-      });
-    }
-  }
-
-  return response;
-}
-
-async function login() {
-  console.log("\n[1] LOGIN");
-
-  const loginPageRes = await fetchWithCookies(`${BASE_URL}/login/index.php`);
-  const loginPageHtml = await loginPageRes.text();
-
-  const $ = cheerio.load(loginPageHtml);
-  const loginToken = $('input[name="logintoken"]').val();
-
-  if (!loginToken) return false;
-
-  const formData = new URLSearchParams({
-    anchor: "",
-    logintoken: String(loginToken),
-    username: USERNAME,
-    password: PASSWORD,
-  });
-
-  const loginRes = await fetchWithCookies(`${BASE_URL}/login/index.php`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: formData.toString(),
-  });
-
-  const resultHtml = await loginRes.text();
-  const $r = cheerio.load(resultHtml);
-  const success = $r('a[href*="logout"]').length > 0;
-
-  console.log(`  Result: ${success ? "SUCCESS" : "FAILED"}`);
-  return success;
-}
-
-async function getSesskey() {
-  const res = await fetchWithCookies(`${BASE_URL}/my/`);
-  const html = await res.text();
-  const match = html.match(/"sesskey":"([^"]+)"/);
-  return match ? match[1] : null;
-}
+loadEnvFromRoot();
+const session = createLmsSession();
+const BASE_URL = session.baseUrl;
 
 async function testTimelineApi(sesskey) {
   console.log("\n[2] TESTING core_calendar_get_action_events_by_timesort");
+  const sessionReady = await session.ensureSession();
+  if (!sessionReady) {
+    console.log("  ERROR: Could not establish LMS session");
+    return null;
+  }
 
   const payload = [
     {
@@ -115,7 +31,7 @@ async function testTimelineApi(sesskey) {
     },
   ];
 
-  const res = await fetchWithCookies(
+  const res = await session.fetchWithSession(
     `${BASE_URL}/lib/ajax/service.php?sesskey=${sesskey}&info=core_calendar_get_action_events_by_timesort`,
     {
       method: "POST",
@@ -156,11 +72,15 @@ async function main() {
   console.log("======================================");
 
   try {
-    if (!(await login())) {
+    console.log("\n[1] LOGIN");
+    const loginOk = await session.login();
+    const cookieCount = await session.getCookieCount();
+    console.log(`  Result: ${loginOk ? "SUCCESS" : "FAILED"} (cookies=${cookieCount})`);
+    if (!loginOk) {
       process.exit(1);
     }
 
-    const sesskey = await getSesskey();
+    const sesskey = await session.getSesskey();
     if (!sesskey) {
       console.log("ERROR: No sesskey");
       process.exit(1);

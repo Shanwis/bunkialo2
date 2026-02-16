@@ -2,8 +2,6 @@ import { Toast } from "@/components";
 import { Container } from "@/components/ui/container";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import type { LmsDownloadProgress } from "../../services/lms-download";
-import { downloadLmsResourceWithSession } from "../../services/lms-download";
 import { useAuthStore } from "@/stores/auth-store";
 import { useBunkStore } from "@/stores/bunk-store";
 import {
@@ -26,6 +24,8 @@ import {
   Text,
   View,
 } from "react-native";
+import type { LmsDownloadProgress } from "../../services/lms-download";
+import { downloadLmsResourceWithSession } from "../../services/lms-download";
 import {
   formatSyncTime,
   getModuleVisual,
@@ -57,11 +57,8 @@ const shouldHideItem = (item: LmsResourceItemNode): boolean => {
 
 const formatOrdinal = (value: number): string => String(value).padStart(2, "0");
 
-const pluralize = (
-  count: number,
-  singular: string,
-  plural: string,
-): string => (count === 1 ? singular : plural);
+const pluralize = (count: number, singular: string, plural: string): string =>
+  count === 1 ? singular : plural;
 
 export default function CourseResourcesScreen() {
   const colorScheme = useColorScheme();
@@ -295,7 +292,7 @@ export default function CourseResourcesScreen() {
             onPress={() =>
               void openExternal(item.url, {
                 tryDownload: item.moduleType === "resource",
-                preferredName: item.title,
+                preferredName: displayCourseName,
               })
             }
           >
@@ -354,7 +351,10 @@ export default function CourseResourcesScreen() {
             </View>
 
             {itemProgressText && (
-              <Text className="mt-1 text-[11px]" style={{ color: theme.textSecondary }}>
+              <Text
+                className="mt-1 text-[11px]"
+                style={{ color: theme.textSecondary }}
+              >
                 {itemProgressText}
               </Text>
             )}
@@ -407,18 +407,14 @@ export default function CourseResourcesScreen() {
               onPress={() =>
                 void openExternal(item.url, {
                   tryDownload: item.moduleType === "resource",
-                  preferredName: item.title,
+                  preferredName: displayCourseName,
                 })
               }
             >
               {isItemDownloading ? (
                 <ActivityIndicator size="small" color={theme.icon} />
               ) : (
-                <Ionicons
-                  name="open-outline"
-                  size={15}
-                  color={theme.icon}
-                />
+                <Ionicons name="open-outline" size={15} color={theme.icon} />
               )}
             </Pressable>
           </View>
@@ -435,7 +431,9 @@ export default function CourseResourcesScreen() {
             >
               {item.children.map((child, childIndex) => {
                 const childDownloadProgress = downloadProgressByUrl[child.url];
-                const isChildDownloading = Boolean(downloadingUrlSet[child.url]);
+                const isChildDownloading = Boolean(
+                  downloadingUrlSet[child.url],
+                );
                 const childProgressText =
                   isChildDownloading && childDownloadProgress
                     ? childDownloadProgress.fraction !== null
@@ -454,7 +452,7 @@ export default function CourseResourcesScreen() {
                     onPress={() =>
                       void openExternal(child.url, {
                         tryDownload: true,
-                        preferredName: child.name,
+                        preferredName: displayCourseName,
                       })
                     }
                   >

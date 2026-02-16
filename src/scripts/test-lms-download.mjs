@@ -1,154 +1,40 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  createLmsSession,
+  isLoginHtml,
+  loadEnvFromRoot,
+} from "./utils/lms-session.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
-const ENV_PATH = path.join(ROOT_DIR, ".env");
 
 const DEFAULT_BASE_URL = "https://lmsug24.iiitkottayam.ac.in";
 const COURSE_IDS = [119, 123];
 const MAX_RESOURCE_TESTS_PER_COURSE = 6;
 const MAX_FOLDER_FILE_TESTS_PER_COURSE = 6;
 
-const readEnvFile = () => {
-  if (!fs.existsSync(ENV_PATH)) return;
-  const raw = fs.readFileSync(ENV_PATH, "utf8");
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const idx = trimmed.indexOf("=");
-    if (idx <= 0) continue;
-    const key = trimmed.slice(0, idx).trim();
-    const value = trimmed.slice(idx + 1).trim();
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
-};
-
-readEnvFile();
-
-const BASE_URL = process.env.LMS_BASE_URL || DEFAULT_BASE_URL;
-const USERNAME = process.env.LMS_TEST_USERNAME;
-const PASSWORD = process.env.LMS_TEST_PASSWORD;
-
-if (!USERNAME || !PASSWORD) {
-  console.error(
-    "Missing LMS_TEST_USERNAME/LMS_TEST_PASSWORD. Set env vars or .env values.",
-  );
-  process.exit(1);
-}
+loadEnvFromRoot();
 
 const cheerio = await import("cheerio");
-const { CookieJar } = await import("tough-cookie");
-const jar = new CookieJar();
+const session = createLmsSession({
+  baseUrl: process.env.LMS_BASE_URL || DEFAULT_BASE_URL,
+});
+const BASE_URL = session.baseUrl;
 
 const normalizeText = (value) => (value || "").replace(/\s+/g, " ").trim();
-
-const toAbsoluteUrl = (href) => {
-  if (!href) return null;
-  if (href.startsWith("http://") || href.startsWith("https://")) return href;
-  if (href.startsWith("//")) return `https:${href}`;
-  if (href.startsWith("/")) return `${BASE_URL}${href}`;
-  return `${BASE_URL}/${href.replace(/^\.?\//, "")}`;
-};
-
-const isLoginHtml = (html) => {
-  const condensed = html.replace(/\s+/g, " ");
-  return (
-    condensed.includes('name="logintoken"') ||
-    condensed.includes('id="login"') ||
-    condensed.includes("/login/index.php")
-  );
-};
 
 const getContentType = (headers) => {
   const value = headers.get("content-type") || headers.get("Content-Type") || "";
   return String(value).toLowerCase();
 };
 
-const getCookieCount = async () => {
-  const cookies = await jar.getCookies(BASE_URL);
-  return cookies.length;
-};
-
-async function fetchWithCookies(url, options = {}, redirectCount = 0) {
-  const cookieHeader = await jar.getCookieString(url);
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    Accept: "*/*",
-    ...(options.headers || {}),
-  };
-  if (cookieHeader) headers.Cookie = cookieHeader;
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    redirect: "manual",
-  });
-
-  const setCookieHeaders = response.headers.getSetCookie?.() || [];
-  for (const cookie of setCookieHeaders) {
-    await jar.setCookie(cookie, url);
-  }
-
-  if (
-    response.status >= 300 &&
-    response.status < 400 &&
-    redirectCount < 10
-  ) {
-    const location = response.headers.get("location");
-    if (location) {
-      const redirectUrl = location.startsWith("http")
-        ? location
-        : new URL(location, url).href;
-      return fetchWithCookies(
-        redirectUrl,
-        {
-          method: "GET",
-          body: undefined,
-        },
-        redirectCount + 1,
-      );
-    }
-  }
-
-  return response;
-}
-
 async function login() {
   console.log("\n[1] Logging in...");
-  const loginPageRes = await fetchWithCookies(`${BASE_URL}/login/index.php`);
-  const loginPageHtml = await loginPageRes.text();
-  const $ = cheerio.load(loginPageHtml);
-  const loginToken = $('input[name="logintoken"]').val();
-
-  if (!loginToken) {
-    throw new Error("Could not find login token");
-  }
-
-  const formData = new URLSearchParams({
-    anchor: "",
-    logintoken: String(loginToken),
-    username: USERNAME,
-    password: PASSWORD,
-  });
-
-  const loginRes = await fetchWithCookies(`${BASE_URL}/login/index.php`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: formData.toString(),
-  });
-
-  const loginHtml = await loginRes.text();
-  const loggedIn =
-    !isLoginHtml(loginHtml) &&
-    (loginHtml.includes("logout") || loginHtml.includes('"sesskey":"'));
-
-  const cookieCount = await getCookieCount();
+  const loggedIn = await session.login();
+  const cookieCount = await session.getCookieCount();
   console.log(`  login: ${loggedIn ? "OK" : "FAILED"}, cookies=${cookieCount}`);
   if (!loggedIn) {
     throw new Error("Login failed");
@@ -156,7 +42,7 @@ async function login() {
 }
 
 async function parseFolderFiles(folderUrl) {
-  const response = await fetchWithCookies(folderUrl);
+  const response = await session.fetchWithSession(folderUrl);
   const html = await response.text();
   const $ = cheerio.load(html);
   const files = [];
@@ -164,7 +50,7 @@ async function parseFolderFiles(folderUrl) {
 
   $("main .foldertree a[href], .foldertree a[href]").each((_idx, link) => {
     const href = $(link).attr("href");
-    const url = toAbsoluteUrl(href);
+    const url = session.toAbsoluteUrl(href);
     if (!url || seen.has(url)) return;
     seen.add(url);
     files.push({
@@ -177,7 +63,9 @@ async function parseFolderFiles(folderUrl) {
 }
 
 async function discoverCourseDownloadTargets(courseId) {
-  const response = await fetchWithCookies(`${BASE_URL}/course/view.php?id=${courseId}`);
+  const response = await session.fetchWithSession(
+    `${BASE_URL}/course/view.php?id=${courseId}`,
+  );
   const html = await response.text();
   const $ = cheerio.load(html);
 
@@ -191,7 +79,7 @@ async function discoverCourseDownloadTargets(courseId) {
       $(activity).find("a[href*='/mod/'][href]").first().attr("href") ||
       "";
 
-    const url = toAbsoluteUrl(href);
+    const url = session.toAbsoluteUrl(href);
     if (!url) return;
 
     const title = normalizeText($(activity).find(".instancename").first().text());
@@ -218,7 +106,7 @@ async function discoverCourseDownloadTargets(courseId) {
 }
 
 async function testDownloadTarget(kind, target) {
-  const response = await fetchWithCookies(target.url);
+  const response = await session.fetchWithSession(target.url);
   const status = response.status;
   const contentType = getContentType(response.headers);
   const bodyText =

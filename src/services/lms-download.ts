@@ -1,9 +1,9 @@
-import { checkSession, tryAutoLogin } from "@/services/auth";
 import { getCurrentBaseUrl } from "@/services/api";
+import { checkSession, tryAutoLogin } from "@/services/auth";
 import { cookieStore } from "@/services/cookie-store";
 import { debug } from "@/utils/debug";
-import { fetch as expoFetch } from "expo/fetch";
 import { File, Paths } from "expo-file-system";
+import { fetch as expoFetch } from "expo/fetch";
 
 type LmsDownloadFailureReason =
   | "reauth-failed"
@@ -85,7 +85,9 @@ const parseFileNameFromContentDisposition = (
   const utfMatch = value.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
   if (utfMatch?.[1]) {
     try {
-      return sanitizeFileName(decodeURIComponent(utfMatch[1].replace(/["']/g, "")));
+      return sanitizeFileName(
+        decodeURIComponent(utfMatch[1].replace(/["']/g, "")),
+      );
     } catch {
       return sanitizeFileName(utfMatch[1].replace(/["']/g, ""));
     }
@@ -152,7 +154,9 @@ const buildFinalFileName = (
 
   const preferredBase = sanitizeFileName(preferredName) || "lms-resource";
   const extFromPath = getExtensionFromPath(absoluteUrl);
-  const contentType = (getHeaderValue(headers, "content-type") || "").toLowerCase();
+  const contentType = (
+    getHeaderValue(headers, "content-type") || ""
+  ).toLowerCase();
   const extFromContentType = CONTENT_TYPE_EXTENSION_MAP[contentType] ?? "";
   const extension = extFromPath || extFromContentType;
 
@@ -169,14 +173,22 @@ type ResolvedFetchResult = {
 };
 
 const isRedirectStatus = (status: number): boolean =>
-  status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+  status === 301 ||
+  status === 302 ||
+  status === 303 ||
+  status === 307 ||
+  status === 308;
 
 const resolveWithCookieRedirects = async (
   absoluteUrl: string,
 ): Promise<ResolvedFetchResult> => {
   let currentUrl = absoluteUrl;
 
-  for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
+  for (
+    let redirectCount = 0;
+    redirectCount <= MAX_REDIRECTS;
+    redirectCount += 1
+  ) {
     const cookieHeader = cookieStore.getCookieHeader();
     const headers: Record<string, string> = {
       "User-Agent": LMS_USER_AGENT,
@@ -224,22 +236,23 @@ const downloadResponseToFile = async (
   fileName: string,
   options?: LmsDownloadOptions,
 ): Promise<string> => {
-  const targetFile = new File(Paths.cache, `${Date.now()}-${fileName}`);
+  const targetFile = new File(Paths.cache, fileName);
   targetFile.create({ intermediates: true, overwrite: true });
 
   const contentLength = Number.parseInt(
     response.headers.get("content-length") ?? "",
     10,
   );
-  const totalBytesExpected = Number.isFinite(contentLength) && contentLength > 0
-    ? contentLength
-    : null;
+  const totalBytesExpected =
+    Number.isFinite(contentLength) && contentLength > 0 ? contentLength : null;
 
   const emitProgress = (totalBytesWritten: number) => {
     options?.onProgress?.({
       totalBytesWritten,
       totalBytesExpected,
-      fraction: totalBytesExpected ? totalBytesWritten / totalBytesExpected : null,
+      fraction: totalBytesExpected
+        ? totalBytesWritten / totalBytesExpected
+        : null,
     });
   };
 
@@ -276,7 +289,8 @@ const performDownloadAttempt = async (
   preferredName: string,
   options?: LmsDownloadOptions,
 ): Promise<LmsDownloadResult> => {
-  const { response, resolvedUrl } = await resolveWithCookieRedirects(absoluteUrl);
+  const { response, resolvedUrl } =
+    await resolveWithCookieRedirects(absoluteUrl);
 
   debug.api("LMS download fetch result", {
     sourceUrl: absoluteUrl,
@@ -295,7 +309,9 @@ const performDownloadAttempt = async (
     );
   }
 
-  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  const contentType = (
+    response.headers.get("content-type") || ""
+  ).toLowerCase();
   if (
     contentType.includes("text/html") ||
     contentType.includes("application/xhtml")
@@ -319,7 +335,11 @@ const performDownloadAttempt = async (
     response.headers,
   );
 
-  const fileUri = await downloadResponseToFile(response, finalFileName, options);
+  const fileUri = await downloadResponseToFile(
+    response,
+    finalFileName,
+    options,
+  );
 
   return {
     success: true,
@@ -346,7 +366,11 @@ export const downloadLmsResourceWithSession = async (
       );
     }
 
-    let result = await performDownloadAttempt(absoluteUrl, preferredName, options);
+    let result = await performDownloadAttempt(
+      absoluteUrl,
+      preferredName,
+      options,
+    );
     if (!result.success && result.reason === "session-login-page") {
       debug.api("LMS download hit login page, attempting one re-auth retry", {
         url: absoluteUrl,
@@ -358,7 +382,11 @@ export const downloadLmsResourceWithSession = async (
           "Could not refresh LMS session. Please re-login.",
         );
       }
-      result = await performDownloadAttempt(absoluteUrl, preferredName, options);
+      result = await performDownloadAttempt(
+        absoluteUrl,
+        preferredName,
+        options,
+      );
     }
 
     return result;
