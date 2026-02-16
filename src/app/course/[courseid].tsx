@@ -2,15 +2,20 @@ import { Toast } from "@/components";
 import { Container } from "@/components/ui/container";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import type { LmsDownloadProgress } from "../../services/lms-download";
+import { downloadLmsResourceWithSession } from "../../services/lms-download";
 import { useAuthStore } from "@/stores/auth-store";
+import { useBunkStore } from "@/stores/bunk-store";
 import {
   LMS_RESOURCES_STALE_MS,
   useLmsResourcesStore,
 } from "@/stores/lms-resources-store";
-import type { LmsResourceItemNode, LmsResourceSectionNode } from "@/types";
+import type { LmsResourceItemNode } from "@/types";
+import { extractCourseName } from "@/utils/course-name";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, type ComponentProps } from "react";
+import { isAvailableAsync, shareAsync } from "expo-sharing";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   InteractionManager,
@@ -21,380 +26,42 @@ import {
   Text,
   View,
 } from "react-native";
+import {
+  formatSyncTime,
+  getModuleVisual,
+  getSectionTone,
+  itemNodeKey,
+  moduleLabel,
+  resolveCourseColorFallback,
+  sectionNodeKey,
+  toRgba,
+} from "./utils/course-utils";
 
-type IoniconName = ComponentProps<typeof Ionicons>["name"];
-
-type Tone = {
-  surface: string;
-  border: string;
-  accent: string;
-  text: string;
-  subtext: string;
-  chipBg: string;
-  chipText: string;
-  iconBg: string;
-};
-
-type ThemedTone = {
-  light: Tone;
-  dark: Tone;
-};
-
-type ModuleVisual = {
-  label: string;
-  icon: IoniconName;
-  tone: ThemedTone;
-};
-
-const SECTION_TONES: ThemedTone[] = [
-  {
-    light: {
-      surface: "#F8F4FF",
-      border: "#E5DAFF",
-      accent: "#896FD6",
-      text: "#312754",
-      subtext: "#5A4C86",
-      chipBg: "#EAE2FF",
-      chipText: "#5D48A1",
-      iconBg: "#EEE7FF",
-    },
-    dark: {
-      surface: "rgba(137,111,214,0.17)",
-      border: "rgba(179,157,255,0.42)",
-      accent: "#C9BAFF",
-      text: "#F1ECFF",
-      subtext: "#CCC2EE",
-      chipBg: "rgba(177,150,255,0.24)",
-      chipText: "#DCCFFF",
-      iconBg: "rgba(194,174,255,0.28)",
-    },
-  },
-  {
-    light: {
-      surface: "#F0FAF6",
-      border: "#CFEFDF",
-      accent: "#2F9D71",
-      text: "#1B4A36",
-      subtext: "#366351",
-      chipBg: "#DDF4E9",
-      chipText: "#217A58",
-      iconBg: "#E1F6EC",
-    },
-    dark: {
-      surface: "rgba(54,173,125,0.16)",
-      border: "rgba(96,206,156,0.38)",
-      accent: "#8DDEBA",
-      text: "#E8FFF3",
-      subtext: "#BEE8D4",
-      chipBg: "rgba(109,216,168,0.22)",
-      chipText: "#CFFFE7",
-      iconBg: "rgba(109,216,168,0.26)",
-    },
-  },
-  {
-    light: {
-      surface: "#FFF7EE",
-      border: "#FFE5C9",
-      accent: "#D8872F",
-      text: "#5B3920",
-      subtext: "#805A3D",
-      chipBg: "#FFECD6",
-      chipText: "#AD6722",
-      iconBg: "#FFF1DE",
-    },
-    dark: {
-      surface: "rgba(216,135,47,0.15)",
-      border: "rgba(255,187,109,0.34)",
-      accent: "#FFC889",
-      text: "#FFF4E7",
-      subtext: "#EFD4B5",
-      chipBg: "rgba(255,188,110,0.22)",
-      chipText: "#FFE2BC",
-      iconBg: "rgba(255,190,120,0.26)",
-    },
-  },
-  {
-    light: {
-      surface: "#EFF8FF",
-      border: "#CCE7FF",
-      accent: "#3E90D6",
-      text: "#1D4363",
-      subtext: "#3A6284",
-      chipBg: "#DDF0FF",
-      chipText: "#2D74B3",
-      iconBg: "#E4F3FF",
-    },
-    dark: {
-      surface: "rgba(62,144,214,0.16)",
-      border: "rgba(120,183,236,0.4)",
-      accent: "#9ED2FF",
-      text: "#EAF6FF",
-      subtext: "#C2DDF2",
-      chipBg: "rgba(121,189,242,0.22)",
-      chipText: "#D4ECFF",
-      iconBg: "rgba(130,196,246,0.26)",
-    },
-  },
+const ANNOUNCEMENT_FORUM_MATCHERS = [
+  "announcement",
+  "announcements",
+  "news forum",
+  "notice board",
 ];
 
-const MODULE_VISUALS: Record<string, ModuleVisual> = {
-  forum: {
-    label: "Forum",
-    icon: "megaphone-outline",
-    tone: {
-      light: {
-        surface: "#EEF5FF",
-        border: "#CFE1FF",
-        accent: "#3D73C7",
-        text: "#1A345E",
-        subtext: "#496490",
-        chipBg: "#DDEAFF",
-        chipText: "#2B5CAA",
-        iconBg: "#E4EEFF",
-      },
-      dark: {
-        surface: "rgba(86,132,209,0.16)",
-        border: "rgba(132,169,233,0.42)",
-        accent: "#B2CDFF",
-        text: "#EDF3FF",
-        subtext: "#CBD9F3",
-        chipBg: "rgba(138,174,238,0.24)",
-        chipText: "#DDEAFF",
-        iconBg: "rgba(138,174,238,0.3)",
-      },
-    },
-  },
-  attendance: {
-    label: "Attendance",
-    icon: "calendar-outline",
-    tone: {
-      light: {
-        surface: "#F2FBF8",
-        border: "#D1EFE5",
-        accent: "#2E9F77",
-        text: "#184A38",
-        subtext: "#386957",
-        chipBg: "#DFF4EC",
-        chipText: "#217D5C",
-        iconBg: "#E5F7F0",
-      },
-      dark: {
-        surface: "rgba(74,181,139,0.16)",
-        border: "rgba(108,212,171,0.42)",
-        accent: "#B4F1D6",
-        text: "#E9FFF6",
-        subtext: "#C6ECDC",
-        chipBg: "rgba(116,220,179,0.24)",
-        chipText: "#D6FFE9",
-        iconBg: "rgba(118,220,180,0.3)",
-      },
-    },
-  },
-  resource: {
-    label: "File",
-    icon: "document-text-outline",
-    tone: {
-      light: {
-        surface: "#FFF6ED",
-        border: "#FFE3C9",
-        accent: "#CF8637",
-        text: "#5A3920",
-        subtext: "#7F5B3E",
-        chipBg: "#FFEBD8",
-        chipText: "#A86827",
-        iconBg: "#FFF1E0",
-      },
-      dark: {
-        surface: "rgba(209,133,59,0.16)",
-        border: "rgba(242,178,111,0.42)",
-        accent: "#FFD2A2",
-        text: "#FFF3E7",
-        subtext: "#EFD3B6",
-        chipBg: "rgba(244,185,122,0.24)",
-        chipText: "#FFE2C0",
-        iconBg: "rgba(244,185,122,0.3)",
-      },
-    },
-  },
-  folder: {
-    label: "Folder",
-    icon: "folder-open-outline",
-    tone: {
-      light: {
-        surface: "#F6F1FF",
-        border: "#E1D4FF",
-        accent: "#8B65CC",
-        text: "#3D2D61",
-        subtext: "#68538F",
-        chipBg: "#ECDDFF",
-        chipText: "#6A48AE",
-        iconBg: "#EEE4FF",
-      },
-      dark: {
-        surface: "rgba(139,101,204,0.17)",
-        border: "rgba(179,148,232,0.42)",
-        accent: "#D6BEFF",
-        text: "#F3EAFF",
-        subtext: "#D4C2F0",
-        chipBg: "rgba(182,150,236,0.25)",
-        chipText: "#E5D2FF",
-        iconBg: "rgba(185,154,238,0.3)",
-      },
-    },
-  },
-  assign: {
-    label: "Assignment",
-    icon: "create-outline",
-    tone: {
-      light: {
-        surface: "#FFF1F5",
-        border: "#FDD2E2",
-        accent: "#D25D8A",
-        text: "#5A233B",
-        subtext: "#8A4B66",
-        chipBg: "#FEE1EB",
-        chipText: "#B2456F",
-        iconBg: "#FFE8F0",
-      },
-      dark: {
-        surface: "rgba(210,93,138,0.17)",
-        border: "rgba(233,140,176,0.42)",
-        accent: "#FFBDD6",
-        text: "#FFEAF2",
-        subtext: "#F3C8D8",
-        chipBg: "rgba(236,148,183,0.24)",
-        chipText: "#FFD9E8",
-        iconBg: "rgba(236,148,183,0.3)",
-      },
-    },
-  },
-  quiz: {
-    label: "Quiz",
-    icon: "help-circle-outline",
-    tone: {
-      light: {
-        surface: "#FFFBEA",
-        border: "#FFEFAE",
-        accent: "#C09A2A",
-        text: "#514112",
-        subtext: "#7A6730",
-        chipBg: "#FFF3CB",
-        chipText: "#997819",
-        iconBg: "#FFF6D8",
-      },
-      dark: {
-        surface: "rgba(192,154,42,0.18)",
-        border: "rgba(226,191,95,0.42)",
-        accent: "#F0D27A",
-        text: "#FFF9DF",
-        subtext: "#EBDFAE",
-        chipBg: "rgba(230,193,94,0.24)",
-        chipText: "#FFF0BE",
-        iconBg: "rgba(230,193,94,0.3)",
-      },
-    },
-  },
-  vpl: {
-    label: "VPL",
-    icon: "code-slash-outline",
-    tone: {
-      light: {
-        surface: "#ECFBFA",
-        border: "#C8EFEC",
-        accent: "#2E9B96",
-        text: "#184947",
-        subtext: "#376866",
-        chipBg: "#D9F4F2",
-        chipText: "#237A75",
-        iconBg: "#E1F7F5",
-      },
-      dark: {
-        surface: "rgba(46,155,150,0.18)",
-        border: "rgba(101,198,194,0.42)",
-        accent: "#A9E7E4",
-        text: "#E7FFFE",
-        subtext: "#C4ECEA",
-        chipBg: "rgba(115,208,204,0.24)",
-        chipText: "#D1F9F7",
-        iconBg: "rgba(115,208,204,0.3)",
-      },
-    },
-  },
-  unknown: {
-    label: "Resource",
-    icon: "layers-outline",
-    tone: {
-      light: {
-        surface: "#F5F7FA",
-        border: "#DCE3EC",
-        accent: "#5E6B7A",
-        text: "#233041",
-        subtext: "#4A5A6B",
-        chipBg: "#E8EDF4",
-        chipText: "#435469",
-        iconBg: "#ECF1F7",
-      },
-      dark: {
-        surface: "rgba(94,107,122,0.2)",
-        border: "rgba(143,156,171,0.42)",
-        accent: "#C8D2DE",
-        text: "#EEF4FA",
-        subtext: "#D0DAE7",
-        chipBg: "rgba(147,160,176,0.26)",
-        chipText: "#DEE7F2",
-        iconBg: "rgba(147,160,176,0.3)",
-      },
-    },
-  },
+const shouldHideItem = (item: LmsResourceItemNode): boolean => {
+  if (item.moduleType !== "forum") return false;
+
+  const normalized = `${item.title} ${item.typeLabel ?? ""}`
+    .toLowerCase()
+    .trim();
+  return ANNOUNCEMENT_FORUM_MATCHERS.some((matcher) =>
+    normalized.includes(matcher),
+  );
 };
 
-const formatSyncTime = (timestamp: number | null): string => {
-  if (!timestamp) return "Never";
+const formatOrdinal = (value: number): string => String(value).padStart(2, "0");
 
-  const date = new Date(timestamp);
-  const today = new Date();
-  const isToday = date.toDateString() === today.toDateString();
-
-  if (isToday) {
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
-
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
-
-const sectionNodeKey = (section: LmsResourceSectionNode): string =>
-  `section:${section.id}`;
-const itemNodeKey = (item: LmsResourceItemNode): string => `item:${item.id}`;
-
-const getSectionTone = (sectionIndex: number, isDark: boolean): Tone => {
-  const tone = SECTION_TONES[sectionIndex % SECTION_TONES.length];
-  return isDark ? tone.dark : tone.light;
-};
-
-const getModuleVisual = (item: LmsResourceItemNode, isDark: boolean): ModuleVisual => {
-  const visual = MODULE_VISUALS[item.moduleType] ?? MODULE_VISUALS.unknown;
-  return {
-    ...visual,
-    tone: {
-      light: visual.tone.light,
-      dark: visual.tone.dark,
-    },
-  };
-};
-
-const moduleLabel = (item: LmsResourceItemNode): string => {
-  if (item.typeLabel) return item.typeLabel;
-  const visual = MODULE_VISUALS[item.moduleType] ?? MODULE_VISUALS.unknown;
-  return visual.label;
-};
+const pluralize = (
+  count: number,
+  singular: string,
+  plural: string,
+): string => (count === 1 ? singular : plural);
 
 export default function CourseResourcesScreen() {
   const colorScheme = useColorScheme();
@@ -434,16 +101,48 @@ export default function CourseResourcesScreen() {
   );
 
   const tree = entry?.tree;
-  const hasCachedTree = Boolean(tree);
-  const visibleSections = useMemo(
-    () => tree?.sections.filter((section) => section.items.length > 0) ?? [],
-    [tree],
+  const bunkCourses = useBunkStore((state) => state.courses);
+  const configuredCourse = useMemo(
+    () => bunkCourses.find((course) => course.courseId === courseId),
+    [bunkCourses, courseId],
   );
+  const courseColor =
+    configuredCourse?.config?.color ?? resolveCourseColorFallback(courseId);
+  const displayCourseName = useMemo(() => {
+    const alias = configuredCourse?.config?.alias?.trim();
+    if (alias) return alias;
+
+    const rawTitle = tree?.courseTitle ?? `Course ${courseId}`;
+    return extractCourseName(rawTitle);
+  }, [configuredCourse?.config?.alias, courseId, tree?.courseTitle]);
+
+  const hasCachedTree = Boolean(tree);
+  const visibleSections = useMemo(() => {
+    if (!tree) return [];
+    return tree.sections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => !shouldHideItem(item)),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [tree]);
 
   const totalItems = useMemo(
-    () => visibleSections.reduce((count, section) => count + section.items.length, 0),
+    () =>
+      visibleSections.reduce(
+        (count, section) => count + section.items.length,
+        0,
+      ),
     [visibleSections],
   );
+
+  const totalSections = visibleSections.length;
+  const [downloadProgressByUrl, setDownloadProgressByUrl] = useState<
+    Record<string, LmsDownloadProgress>
+  >({});
+  const [downloadingUrlSet, setDownloadingUrlSet] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
     if (!courseId || !hasHydrated) return;
@@ -461,7 +160,78 @@ export default function CourseResourcesScreen() {
     return () => task.cancel();
   }, [courseId, entry, fetchCourseResources, hasHydrated]);
 
-  const openExternal = async (url: string): Promise<void> => {
+  const openExternal = async (
+    url: string,
+    options?: { tryDownload?: boolean; preferredName?: string },
+  ): Promise<void> => {
+    if (options?.tryDownload) {
+      if (downloadingUrlSet[url]) return;
+
+      setDownloadingUrlSet((prev) => ({ ...prev, [url]: true }));
+      setDownloadProgressByUrl((prev) => ({
+        ...prev,
+        [url]: {
+          totalBytesWritten: 0,
+          totalBytesExpected: null,
+          fraction: null,
+        },
+      }));
+
+      const downloadResult = await downloadLmsResourceWithSession(
+        url,
+        options.preferredName ?? "lms-resource",
+        {
+          onProgress: (progress) => {
+            setDownloadProgressByUrl((prev) => ({
+              ...prev,
+              [url]: progress,
+            }));
+          },
+        },
+      );
+
+      if (!downloadResult.success) {
+        setDownloadingUrlSet((prev) => {
+          const next = { ...prev };
+          delete next[url];
+          return next;
+        });
+        setDownloadProgressByUrl((prev) => {
+          const next = { ...prev };
+          delete next[url];
+          return next;
+        });
+        Toast.show(downloadResult.message || "Download failed", {
+          type: "error",
+        });
+        return;
+      }
+
+      const canShare = await isAvailableAsync();
+      if (canShare) {
+        await shareAsync(downloadResult.uri, {
+          dialogTitle: "Open downloaded file",
+        });
+      } else {
+        await Linking.openURL(downloadResult.uri);
+      }
+
+      setDownloadingUrlSet((prev) => {
+        const next = { ...prev };
+        delete next[url];
+        return next;
+      });
+      setDownloadProgressByUrl((prev) => {
+        const next = { ...prev };
+        delete next[url];
+        return next;
+      });
+      Toast.show("Downloaded successfully", {
+        type: "success",
+      });
+      return;
+    }
+
     try {
       const supported = await Linking.canOpenURL(url);
       if (!supported) {
@@ -474,7 +244,7 @@ export default function CourseResourcesScreen() {
     }
   };
 
-  const renderItem = (item: LmsResourceItemNode, sectionIndex: number) => {
+  const renderItem = (item: LmsResourceItemNode, itemNumber: string) => {
     const canExpandFolder =
       item.moduleType === "folder" && item.children.length > 0;
     const nodeKey = itemNodeKey(item);
@@ -482,61 +252,112 @@ export default function CourseResourcesScreen() {
       expandedByNode[nodeKey] ?? !(item.initiallyCollapsed ?? false);
 
     const moduleVisual = getModuleVisual(item, isDark);
-    const moduleTone = isDark ? moduleVisual.tone.dark : moduleVisual.tone.light;
+    const moduleTone = isDark
+      ? moduleVisual.tone.dark
+      : moduleVisual.tone.light;
+    const itemDownloadProgress = downloadProgressByUrl[item.url];
+    const isItemDownloading = Boolean(downloadingUrlSet[item.url]);
+    const itemProgressText =
+      isItemDownloading && itemDownloadProgress
+        ? itemDownloadProgress.fraction !== null
+          ? `Downloading ${Math.round(itemDownloadProgress.fraction * 100)}%`
+          : "Downloading..."
+        : null;
 
     return (
       <View
         key={item.id}
         className="overflow-hidden rounded-2xl border"
         style={{
-          borderColor: moduleTone.border,
-          backgroundColor: moduleTone.surface,
+          borderColor: theme.border,
+          backgroundColor: theme.backgroundSecondary,
         }}
       >
         <View
-          className="absolute bottom-0 left-0 top-0 w-[5px]"
+          className="absolute bottom-0 left-0 top-0 w-[4px]"
           style={{ backgroundColor: moduleTone.accent }}
         />
 
         <View className="flex-row items-start gap-3 px-3 py-3">
           <View
             className="mt-0.5 h-8 w-8 items-center justify-center rounded-full"
-            style={{ backgroundColor: moduleTone.iconBg }}
+            style={{
+              backgroundColor: theme.background,
+              borderColor: theme.border,
+              borderWidth: 1,
+            }}
           >
-            <Ionicons name={moduleVisual.icon} size={16} color={moduleTone.accent} />
+            <Ionicons name={moduleVisual.icon} size={16} color={theme.icon} />
           </View>
 
           <Pressable
             className="flex-1"
-            onPress={() => void openExternal(item.url)}
+            onPress={() =>
+              void openExternal(item.url, {
+                tryDownload: item.moduleType === "resource",
+                preferredName: item.title,
+              })
+            }
           >
-            <Text
-              className="text-[14px] font-semibold"
-              style={{ color: moduleTone.text }}
-              numberOfLines={2}
-            >
-              {item.title}
-            </Text>
+            <View className="flex-row items-center gap-2">
+              <View
+                className="rounded-md border px-2 py-0.5"
+                style={{
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
+                }}
+              >
+                <Text
+                  className="text-[11px] font-bold tracking-[0.5px]"
+                  style={{
+                    color: theme.textSecondary,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {itemNumber}
+                </Text>
+              </View>
+              <Text
+                className="flex-1 text-[14px] font-semibold"
+                style={{ color: theme.text }}
+                numberOfLines={2}
+              >
+                {item.title}
+              </Text>
+            </View>
 
             <View className="mt-2 flex-row flex-wrap items-center gap-2">
               <View
-                className="rounded-full px-2.5 py-1"
-                style={{ backgroundColor: moduleTone.chipBg }}
+                className="rounded-full border px-2.5 py-1"
+                style={{
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
+                }}
               >
                 <Text
                   className="text-[10px] font-semibold uppercase tracking-[0.4px]"
-                  style={{ color: moduleTone.chipText }}
+                  style={{ color: theme.textSecondary }}
                 >
                   {moduleLabel(item)}
                 </Text>
               </View>
 
               {item.children.length > 0 && (
-                <Text className="text-[11px]" style={{ color: moduleTone.subtext }}>
-                  {item.children.length} file{item.children.length > 1 ? "s" : ""}
+                <Text
+                  className="text-[11px]"
+                  style={{ color: theme.textSecondary }}
+                >
+                  {item.children.length} file
+                  {item.children.length > 1 ? "s" : ""}
                 </Text>
               )}
             </View>
+
+            {itemProgressText && (
+              <Text className="mt-1 text-[11px]" style={{ color: theme.textSecondary }}>
+                {itemProgressText}
+              </Text>
+            )}
 
             {item.availabilityText && (
               <View
@@ -561,27 +382,44 @@ export default function CourseResourcesScreen() {
             {canExpandFolder && (
               <Pressable
                 className="h-8 w-8 items-center justify-center rounded-full"
-                style={{ backgroundColor: moduleTone.iconBg }}
+                style={{
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
+                  borderWidth: 1,
+                }}
                 onPress={() => toggleNodeExpanded(courseId, nodeKey)}
               >
                 <Ionicons
                   name={expanded ? "chevron-up" : "chevron-down"}
                   size={16}
-                  color={moduleTone.accent}
+                  color={theme.icon}
                 />
               </Pressable>
             )}
 
             <Pressable
               className="h-8 w-8 items-center justify-center rounded-full"
-              style={{ backgroundColor: moduleTone.iconBg }}
-              onPress={() => void openExternal(item.url)}
+              style={{
+                backgroundColor: theme.background,
+                borderColor: theme.border,
+                borderWidth: 1,
+              }}
+              onPress={() =>
+                void openExternal(item.url, {
+                  tryDownload: item.moduleType === "resource",
+                  preferredName: item.title,
+                })
+              }
             >
-              <Ionicons
-                name="open-outline"
-                size={15}
-                color={moduleTone.accent}
-              />
+              {isItemDownloading ? (
+                <ActivityIndicator size="small" color={theme.icon} />
+              ) : (
+                <Ionicons
+                  name="open-outline"
+                  size={15}
+                  color={theme.icon}
+                />
+              )}
             </Pressable>
           </View>
         </View>
@@ -589,36 +427,75 @@ export default function CourseResourcesScreen() {
         {canExpandFolder && expanded && (
           <View
             className="border-t px-3 pb-3 pt-2"
-            style={{ borderColor: moduleTone.border }}
+            style={{ borderColor: theme.border }}
           >
             <View
               className="ml-3 gap-2 border-l pl-3"
-              style={{ borderColor: moduleTone.border }}
+              style={{ borderColor: theme.border }}
             >
-              {item.children.map((child) => (
-                <Pressable
-                  key={child.id}
-                  className="flex-row items-center justify-between rounded-xl border px-3 py-2"
-                  style={{
-                    backgroundColor: isDark ? theme.background : Colors.white,
-                    borderColor: moduleTone.border,
-                  }}
-                  onPress={() => void openExternal(child.url)}
-                >
-                  <Text
-                    className="flex-1 pr-2 text-[12px]"
-                    style={{ color: theme.text }}
-                    numberOfLines={2}
+              {item.children.map((child, childIndex) => {
+                const childDownloadProgress = downloadProgressByUrl[child.url];
+                const isChildDownloading = Boolean(downloadingUrlSet[child.url]);
+                const childProgressText =
+                  isChildDownloading && childDownloadProgress
+                    ? childDownloadProgress.fraction !== null
+                      ? `${Math.round(childDownloadProgress.fraction * 100)}%`
+                      : "..."
+                    : null;
+
+                return (
+                  <Pressable
+                    key={child.id}
+                    className="flex-row items-center justify-between rounded-xl border px-3 py-2"
+                    style={{
+                      backgroundColor: theme.background,
+                      borderColor: theme.border,
+                    }}
+                    onPress={() =>
+                      void openExternal(child.url, {
+                        tryDownload: true,
+                        preferredName: child.name,
+                      })
+                    }
                   >
-                    {child.name}
-                  </Text>
-                  <Ionicons
-                    name="document-outline"
-                    size={14}
-                    color={moduleTone.accent}
-                  />
-                </Pressable>
-              ))}
+                    <View className="flex-1 flex-row items-center gap-2 pr-2">
+                      <Text
+                        className="text-[11px] font-bold tracking-[0.4px]"
+                        style={{
+                          color: theme.textSecondary,
+                          fontVariant: ["tabular-nums"],
+                        }}
+                      >
+                        {`${itemNumber}.${formatOrdinal(childIndex + 1)}`}
+                      </Text>
+                      <Text
+                        className="flex-1 text-[12px]"
+                        style={{ color: theme.text }}
+                        numberOfLines={2}
+                      >
+                        {child.name}
+                      </Text>
+                      {childProgressText && (
+                        <Text
+                          className="text-[11px] font-semibold"
+                          style={{ color: theme.textSecondary }}
+                        >
+                          {childProgressText}
+                        </Text>
+                      )}
+                    </View>
+                    {isChildDownloading ? (
+                      <ActivityIndicator size="small" color={theme.icon} />
+                    ) : (
+                      <Ionicons
+                        name="document-outline"
+                        size={14}
+                        color={theme.icon}
+                      />
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
         )}
@@ -628,17 +505,6 @@ export default function CourseResourcesScreen() {
 
   return (
     <Container className="relative">
-      <View pointerEvents="none" className="absolute inset-0">
-        <View
-          className="absolute -left-10 top-8 h-44 w-44 rounded-full"
-          style={{ backgroundColor: isDark ? "#8B65CC22" : "#8B65CC1A" }}
-        />
-        <View
-          className="absolute -right-8 top-32 h-36 w-36 rounded-full"
-          style={{ backgroundColor: isDark ? "#2E9B9620" : "#2E9B9615" }}
-        />
-      </View>
-
       <ScrollView
         contentContainerClassName="px-4 pb-10"
         refreshControl={
@@ -657,7 +523,9 @@ export default function CourseResourcesScreen() {
             <Pressable
               onPress={() => router.back()}
               className="h-11 w-11 items-center justify-center rounded-full"
-              style={{ backgroundColor: isDark ? Colors.gray[900] : Colors.white }}
+              style={{
+                backgroundColor: isDark ? Colors.gray[900] : Colors.white,
+              }}
             >
               <Ionicons name="arrow-back" size={21} color={theme.text} />
             </Pressable>
@@ -669,46 +537,86 @@ export default function CourseResourcesScreen() {
                 borderColor: theme.border,
               }}
             >
-              <Text className="text-[10px]" style={{ color: theme.textSecondary }}>
+              <Text
+                className="text-[10px]"
+                style={{ color: theme.textSecondary }}
+              >
                 {formatSyncTime(entry?.lastSyncTime ?? null)}
               </Text>
             </View>
           </View>
 
           <View
-            className="rounded-[26px] border px-4 py-4"
+            className="overflow-hidden rounded-3xl border px-4 py-4"
             style={{
-              borderColor: isDark ? "#8B65CC55" : "#D9CCFF",
-              backgroundColor: isDark ? "rgba(139,101,204,0.16)" : "#F7F2FF",
+              borderColor: theme.border,
+              backgroundColor: theme.backgroundSecondary,
             }}
           >
-            <Text className="text-[30px] font-extrabold" style={{ color: theme.text }}>
-              {tree?.courseTitle ?? `Course ${courseId}`}
-            </Text>
-            <Text className="mt-1 text-[13px]" style={{ color: theme.textSecondary }}>
-              Hierarchical LMS resource tree
+            <View
+              className="absolute left-0 right-0 top-0 h-[4px]"
+              style={{
+                backgroundColor: toRgba(courseColor, isDark ? 0.85 : 0.7),
+              }}
+            />
+            <Text
+              className="text-[30px] font-extrabold leading-[36px]"
+              style={{ color: theme.text }}
+              numberOfLines={3}
+            >
+              {displayCourseName}
             </Text>
 
-            <View className="mt-4 flex-row flex-wrap gap-2">
+            <View className="mt-3 flex-row flex-wrap items-center gap-2">
               <View
-                className="rounded-full px-3 py-1"
+                className="rounded-full border px-3 py-1.5"
                 style={{
-                  backgroundColor: isDark ? "#8B65CC44" : "#E8DEFF",
+                  backgroundColor: theme.backgroundSecondary,
+                  borderColor: theme.border,
                 }}
               >
-                <Text className="text-[11px] font-semibold" style={{ color: theme.text }}>
-                  {visibleSections.length} section{visibleSections.length > 1 ? "s" : ""}
-                </Text>
+                <View className="flex-row items-end gap-1">
+                  <Text
+                    className="text-[14px] font-bold leading-[16px]"
+                    style={{
+                      color: theme.text,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {totalSections}
+                  </Text>
+                  <Text
+                    className="text-[10px] font-semibold uppercase tracking-[0.5px]"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    {pluralize(totalSections, "section", "sections")}
+                  </Text>
+                </View>
               </View>
               <View
-                className="rounded-full px-3 py-1"
+                className="rounded-full border px-3 py-1.5"
                 style={{
-                  backgroundColor: isDark ? "#2E9B9644" : "#D9F4F2",
+                  backgroundColor: theme.backgroundSecondary,
+                  borderColor: theme.border,
                 }}
               >
-                <Text className="text-[11px] font-semibold" style={{ color: theme.text }}>
-                  {totalItems} resource{totalItems > 1 ? "s" : ""}
-                </Text>
+                <View className="flex-row items-end gap-1">
+                  <Text
+                    className="text-[14px] font-bold leading-[16px]"
+                    style={{
+                      color: theme.text,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {totalItems}
+                  </Text>
+                  <Text
+                    className="text-[10px] font-semibold uppercase tracking-[0.5px]"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    {pluralize(totalItems, "resource", "resources")}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -722,7 +630,10 @@ export default function CourseResourcesScreen() {
               borderColor: `${Colors.status.warning}66`,
             }}
           >
-            <Text className="text-[12px]" style={{ color: Colors.status.warning }}>
+            <Text
+              className="text-[12px]"
+              style={{ color: Colors.status.warning }}
+            >
               Offline mode: showing cached resources
             </Text>
           </View>
@@ -745,7 +656,10 @@ export default function CourseResourcesScreen() {
               backgroundColor: `${Colors.status.danger}12`,
             }}
           >
-            <Text className="text-[14px] text-center" style={{ color: Colors.status.danger }}>
+            <Text
+              className="text-[14px] text-center"
+              style={{ color: Colors.status.danger }}
+            >
               {error}
             </Text>
             <Pressable
@@ -756,7 +670,10 @@ export default function CourseResourcesScreen() {
                 void refreshCourseResources(courseId);
               }}
             >
-              <Text className="text-[13px] font-semibold" style={{ color: theme.text }}>
+              <Text
+                className="text-[13px] font-semibold"
+                style={{ color: theme.text }}
+              >
                 Retry
               </Text>
             </Pressable>
@@ -766,10 +683,20 @@ export default function CourseResourcesScreen() {
         {tree && visibleSections.length === 0 && !isLoading && (
           <View
             className="items-center gap-2 rounded-2xl border px-4 py-8"
-            style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}
+            style={{
+              borderColor: theme.border,
+              backgroundColor: theme.backgroundSecondary,
+            }}
           >
-            <Ionicons name="albums-outline" size={26} color={theme.textSecondary} />
-            <Text className="text-[14px]" style={{ color: theme.textSecondary }}>
+            <Ionicons
+              name="albums-outline"
+              size={26}
+              color={theme.textSecondary}
+            />
+            <Text
+              className="text-[14px]"
+              style={{ color: theme.textSecondary }}
+            >
               No resources available in this course.
             </Text>
           </View>
@@ -779,20 +706,26 @@ export default function CourseResourcesScreen() {
           <View className="gap-3">
             {visibleSections.map((section, sectionIndex) => {
               const key = sectionNodeKey(section);
-              const expanded = expandedByNode[key] ?? !section.initiallyCollapsed;
+              const expanded =
+                expandedByNode[key] ?? !section.initiallyCollapsed;
               const sectionTone = getSectionTone(sectionIndex, isDark);
+              const sectionNumber =
+                section.sectionNumber && section.sectionNumber > 0
+                  ? section.sectionNumber
+                  : sectionIndex + 1;
+              const sectionOrdinal = formatOrdinal(sectionNumber);
 
               return (
                 <View
                   key={section.id}
                   className="overflow-hidden rounded-[24px] border"
                   style={{
-                    borderColor: sectionTone.border,
-                    backgroundColor: sectionTone.surface,
+                    borderColor: theme.border,
+                    backgroundColor: theme.backgroundSecondary,
                   }}
                 >
                   <View
-                    className="h-[4px] w-full"
+                    className="absolute bottom-0 left-0 top-0 w-[4px]"
                     style={{ backgroundColor: sectionTone.accent }}
                   />
 
@@ -803,45 +736,82 @@ export default function CourseResourcesScreen() {
                     <View className="flex-1 pr-2">
                       <View className="flex-row items-center gap-2">
                         <View
-                          className="h-7 w-7 items-center justify-center rounded-full"
-                          style={{ backgroundColor: sectionTone.iconBg }}
+                          className="h-8 min-w-[42px] items-center justify-center rounded-lg px-2"
+                          style={{
+                            backgroundColor: theme.background,
+                            borderColor: theme.border,
+                            borderWidth: 1,
+                          }}
                         >
-                          <Ionicons
-                            name="layers-outline"
-                            size={14}
-                            color={sectionTone.accent}
-                          />
+                          <Text
+                            className="text-[12px] font-bold tracking-[0.6px]"
+                            style={{
+                              color: theme.textSecondary,
+                              fontVariant: ["tabular-nums"],
+                            }}
+                          >
+                            {sectionOrdinal}
+                          </Text>
                         </View>
-                        <Text className="text-[16px] font-bold" style={{ color: sectionTone.text }}>
+                        <Text
+                          className="text-[16px] font-bold"
+                          style={{ color: theme.text }}
+                        >
                           {section.title}
                         </Text>
                       </View>
 
                       <View
-                        className="mt-2 self-start rounded-full px-2.5 py-1"
-                        style={{ backgroundColor: sectionTone.chipBg }}
+                        className="mt-2 self-start rounded-full border px-3 py-1.5"
+                        style={{
+                          backgroundColor: theme.background,
+                          borderColor: theme.border,
+                        }}
                       >
-                        <Text className="text-[10px] font-semibold" style={{ color: sectionTone.chipText }}>
-                          {section.items.length} item{section.items.length > 1 ? "s" : ""}
-                        </Text>
+                        <View className="flex-row items-end gap-1">
+                          <Text
+                            className="text-[13px] font-bold leading-[15px]"
+                            style={{
+                              color: theme.text,
+                              fontVariant: ["tabular-nums"],
+                            }}
+                          >
+                            {section.items.length}
+                          </Text>
+                          <Text
+                            className="text-[10px] font-semibold uppercase tracking-[0.45px]"
+                            style={{ color: theme.textSecondary }}
+                          >
+                            {pluralize(section.items.length, "item", "items")}
+                          </Text>
+                        </View>
                       </View>
                     </View>
 
                     <View
                       className="h-8 w-8 items-center justify-center rounded-full"
-                      style={{ backgroundColor: sectionTone.iconBg }}
+                      style={{
+                        backgroundColor: theme.background,
+                        borderColor: theme.border,
+                        borderWidth: 1,
+                      }}
                     >
                       <Ionicons
                         name={expanded ? "chevron-up" : "chevron-down"}
                         size={18}
-                        color={sectionTone.accent}
+                        color={theme.icon}
                       />
                     </View>
                   </Pressable>
 
                   {expanded && (
                     <View className="gap-2 px-3 pb-3">
-                      {section.items.map((item) => renderItem(item, sectionIndex))}
+                      {section.items.map((item, itemIndex) =>
+                        renderItem(
+                          item,
+                          `${sectionOrdinal}.${formatOrdinal(itemIndex + 1)}`,
+                        ),
+                      )}
                     </View>
                   )}
                 </View>

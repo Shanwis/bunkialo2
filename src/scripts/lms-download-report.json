@@ -1,0 +1,126 @@
+{
+  "baseUrl": "https://lmsug24.iiitkottayam.ac.in",
+  "testedAt": "2026-02-16T19:01:45.702Z",
+  "total": 13,
+  "ok": 13,
+  "failed": 0,
+  "results": [
+    {
+      "kind": "resource",
+      "title": "About the course File",
+      "url": "https://lmsug24.iiitkottayam.ac.in/mod/resource/view.php?id=3880",
+      "status": 200,
+      "contentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "folder-file",
+      "title": "ComputerNetworks_ASystemsApproach_2011_LarryL.PetersonBruceS.Davie.pdf",
+      "url": "https://lmsug24.iiitkottayam.ac.in/pluginfile.php/9237/mod_folder/content/0/ComputerNetworks_ASystemsApproach_2011_LarryL.PetersonBruceS.Davie.pdf?forcedownload=1",
+      "status": 200,
+      "contentType": "application/pdf",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "folder-file",
+      "title": "Data-Communications-and-Network-5e.pdf",
+      "url": "https://lmsug24.iiitkottayam.ac.in/pluginfile.php/9237/mod_folder/content/0/Data-Communications-and-Network-5e.pdf?forcedownload=1",
+      "status": 200,
+      "contentType": "application/pdf",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "folder-file",
+      "title": "L1.pptx",
+      "url": "https://lmsug24.iiitkottayam.ac.in/pluginfile.php/8738/mod_folder/content/0/L1.pptx?forcedownload=1",
+      "status": 200,
+      "contentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "folder-file",
+      "title": "Lec 03.pptx",
+      "url": "https://lmsug24.iiitkottayam.ac.in/pluginfile.php/8738/mod_folder/content/0/Lec%2003.pptx?forcedownload=1",
+      "status": 200,
+      "contentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "folder-file",
+      "title": "Lec02.pptx",
+      "url": "https://lmsug24.iiitkottayam.ac.in/pluginfile.php/8738/mod_folder/content/0/Lec02.pptx?forcedownload=1",
+      "status": 200,
+      "contentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "folder-file",
+      "title": "M2_L-01-03.pptx",
+      "url": "https://lmsug24.iiitkottayam.ac.in/pluginfile.php/8984/mod_folder/content/0/M2_L-01-03.pptx?forcedownload=1",
+      "status": 200,
+      "contentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "resource",
+      "title": "Syllabus File",
+      "url": "https://lmsug24.iiitkottayam.ac.in/mod/resource/view.php?id=4289",
+      "status": 200,
+      "contentType": "application/pdf",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "resource",
+      "title": "Basics File",
+      "url": "https://lmsug24.iiitkottayam.ac.in/mod/resource/view.php?id=4290",
+      "status": 200,
+      "contentType": "application/pdf",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "resource",
+      "title": "Graph basics File",
+      "url": "https://lmsug24.iiitkottayam.ac.in/mod/resource/view.php?id=4291",
+      "status": 200,
+      "contentType": "application/pdf",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "resource",
+      "title": "Kosaraju's algorithm File",
+      "url": "https://lmsug24.iiitkottayam.ac.in/mod/resource/view.php?id=4292",
+      "status": 200,
+      "contentType": "application/pdf",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "resource",
+      "title": "Tarjan's algorithm File",
+      "url": "https://lmsug24.iiitkottayam.ac.in/mod/resource/view.php?id=4293",
+      "status": 200,
+      "contentType": "application/pdf",
+      "loginPage": false,
+      "ok": true
+    },
+    {
+      "kind": "resource",
+      "title": "Topological sort File",
+      "url": "https://lmsug24.iiitkottayam.ac.in/mod/resource/view.php?id=4294",
+      "status": 200,
+      "contentType": "application/pdf",
+      "loginPage": false,
+      "ok": true
+    }
+  ]
+}
