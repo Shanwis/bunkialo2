@@ -129,6 +129,7 @@ export default function AssignmentDetailScreen() {
   }, [editSession?.onlineTextDraftHtml, hasSeededOnlineText]);
 
   const dueIsOverdue = Boolean(details?.dueAt && details.dueAt < Date.now());
+  const resolvedCourseId = details?.courseId ?? courseId;
   const breadcrumbCourse = details?.courseName ?? (courseId ? `Course ${courseId}` : "Course");
   const breadcrumbAssignment =
     details?.assignmentName ?? (assignmentId ? `Assignment ${assignmentId}` : "Assignment");
@@ -151,6 +152,18 @@ export default function AssignmentDetailScreen() {
     } catch {
       Toast.show("Could not open assignment on LMS", { type: "error" });
     }
+  };
+
+  const openDashboard = () => {
+    router.push("/(tabs)");
+  };
+
+  const openCourseResources = () => {
+    if (!resolvedCourseId) {
+      Toast.show("Could not resolve course route", { type: "error" });
+      return;
+    }
+    router.push(`/course/${resolvedCourseId}`);
   };
 
   const addFiles = async () => {
@@ -286,10 +299,57 @@ export default function AssignmentDetailScreen() {
             </View>
           </View>
 
-          <View className="rounded-2xl border px-4 py-3" style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}>
-            <Text className="text-[12px] font-semibold" style={{ color: theme.textSecondary }}>
-              {breadcrumbCourse} &gt; {breadcrumbAssignment}
-            </Text>
+          <View
+            className="rounded-2xl border px-4 py-3"
+            style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}
+          >
+            <View className="flex-row flex-wrap items-center gap-1.5">
+              <Pressable
+                className="rounded-md px-1 py-0.5"
+                onPress={openDashboard}
+              >
+                <Text className="text-[12px] font-semibold" style={{ color: theme.textSecondary }}>
+                  Dashboard
+                </Text>
+              </Pressable>
+
+              <Ionicons
+                name="chevron-forward"
+                size={12}
+                color={theme.textSecondary}
+              />
+
+              <Pressable
+                className="rounded-md px-1 py-0.5"
+                onPress={openCourseResources}
+                disabled={!resolvedCourseId}
+              >
+                <Text
+                  className="text-[12px] font-semibold"
+                  style={{
+                    color: resolvedCourseId ? theme.textSecondary : `${theme.textSecondary}88`,
+                  }}
+                  numberOfLines={1}
+                >
+                  {breadcrumbCourse}
+                </Text>
+              </Pressable>
+
+              <Ionicons
+                name="chevron-forward"
+                size={12}
+                color={theme.textSecondary}
+              />
+
+              <Text
+                className="text-[12px] font-semibold"
+                style={{ color: theme.text }}
+                numberOfLines={1}
+              >
+                {breadcrumbAssignment}
+              </Text>
+            </View>
+
             <Text className="mt-1 text-[24px] font-extrabold leading-[30px]" style={{ color: theme.text }}>
               {breadcrumbAssignment}
             </Text>
