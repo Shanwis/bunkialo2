@@ -289,6 +289,17 @@ components/
 2. Scrape `/mod/attendance/view.php?id={id}&view=5` for user report.
 3. Parse metrics: Total Sessions, Attended, Percentage.
 
+### LMS Resources Tree + Authenticated Downloads
+
+1. Scrape course resources from `/course/view.php?id={courseId}` into section -> activity hierarchy.
+2. Parse folder file nodes from `/mod/folder/view.php?id=...` (`.foldertree a[href]`).
+3. Open course resource overview route: `app/course/[courseid].tsx`.
+4. For protected files, use `services/lms-download.ts`:
+   - validate/refresh session via `checkSession()` + `tryAutoLogin()`
+   - fetch with cookies + manual redirect handling (Moodle resource redirects)
+   - reject login-page HTML responses as auth failures
+   - surface progress updates to UI/toast.
+
 ### Timetable Generation
 
 1. Parse attendance records to extract day, time, and session type.
@@ -373,12 +384,23 @@ debug.scraper("Dashboard refresh triggered", data);
 
 ```bash
 # Test scraper
-node scripts/test-scraper.mjs
+node src/scripts/test-scraper.mjs
 # Test dashboard
-node scripts/test-dashboard.mjs
+node src/scripts/test-dashboard.mjs
+# Test LMS resources scraper
+node src/scripts/test-resources-scraper.mjs
+# Test LMS authenticated downloads
+node src/scripts/test-lms-download.mjs
 # Test timetable
-node scripts/test-timetable-logic.mjs
+node src/scripts/test-timetable-logic.mjs
 ```
+
+## Script Session Utility
+
+- Reuse `src/scripts/utils/lms-session.mjs` in LMS test scripts.
+- Do not duplicate cookie jar/login/redirect code in each script.
+- Prefer `fetchWithSession()` (auto re-login + retry on login-page responses) for protected LMS endpoints.
+- Use `loadEnvFromRoot()` to read `.env` in scripts.
 
 ---
 

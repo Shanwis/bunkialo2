@@ -1,5 +1,8 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  resolveDashboardEventRoute,
+} from "@/app/course/utils/event-route";
 import { useBunkStore } from "@/stores/bunk-store";
 import { Toast } from "@/components";
 import type { TimelineEvent } from "@/types";
@@ -76,27 +79,6 @@ const formatTime = (timestamp: number): string => {
   });
 };
 
-const extractCourseIdFromUrl = (url: string): string | null => {
-  if (!url) return null;
-
-  const courseIdMatch = url.match(/[?&]course=(\d+)/);
-  if (courseIdMatch) return courseIdMatch[1];
-
-  const viewIdMatch = url.match(/\/course\/view\.php\?id=(\d+)/);
-  if (viewIdMatch) return viewIdMatch[1];
-
-  return null;
-};
-
-const resolveEventCourseId = (event: TimelineEvent): string | null => {
-  if (event.course?.id) return String(event.course.id);
-
-  const fromViewUrl = extractCourseIdFromUrl(event.course?.viewurl ?? "");
-  if (fromViewUrl) return fromViewUrl;
-
-  return extractCourseIdFromUrl(event.url ?? "");
-};
-
 export const EventCard = ({ event, isOverdue }: EventCardProps) => {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -122,21 +104,28 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
       ?.config?.color || fallbackColor;
 
   const openOnLms = () => {
-    Linking.openURL(event.url);
+    void Linking.openURL(event.url);
   };
 
   const openCourseResources = () => {
-    const courseId = resolveEventCourseId(event);
-    if (!courseId) {
+    const route = resolveDashboardEventRoute(event);
+    if (route.type === "unresolved") {
       Toast.show("Could not resolve course for this event", {
         type: "error",
       });
       return;
     }
 
+    if (route.type === "assignment") {
+      router.push(
+        `/course/${route.courseId}/assignment/${route.assignmentId}`,
+      );
+      return;
+    }
+
     router.push({
       pathname: "/course/[courseid]",
-      params: { courseid: courseId },
+      params: { courseid: route.courseId },
     });
   };
 

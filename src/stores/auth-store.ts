@@ -14,6 +14,7 @@ import { useBunkStore } from "@/stores/bunk-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { useFacultyStore } from "@/stores/faculty-store";
 import { useLmsResourcesStore } from "@/stores/lms-resources-store";
+import { useAssignmentStore } from "@/stores/assignment-store";
 import { useTimetableStore } from "@/stores/timetable-store";
 import type { AuthState } from "@/types";
 import axios from "axios";
@@ -107,6 +108,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
       useTimetableStore.getState().clearTimetable();
       useFacultyStore.getState().clearRecentSearches();
       useLmsResourcesStore.getState().clearCourseResources();
+      useAssignmentStore.getState().clearAssignmentCache();
       useAttendanceUIStore.getState().resetUI();
 
       await authService.logout();

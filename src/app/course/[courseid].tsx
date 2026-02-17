@@ -36,6 +36,7 @@ import {
   sectionNodeKey,
   toRgba,
 } from "./utils/course-utils";
+import { parseAssignmentIdFromUrl } from "./utils/event-route";
 
 const ANNOUNCEMENT_FORUM_MATCHERS = [
   "announcement",
@@ -241,6 +242,25 @@ export default function CourseResourcesScreen() {
     }
   };
 
+  const openItem = (item: LmsResourceItemNode) => {
+    if (item.moduleType === "assign") {
+      const assignmentId = parseAssignmentIdFromUrl(item.url);
+      if (assignmentId) {
+        router.push(`/course/${courseId}/assignment/${assignmentId}`);
+        return;
+      }
+
+      Toast.show("Could not resolve assignment id. Opening LMS page.", {
+        type: "warning",
+      });
+    }
+
+    void openExternal(item.url, {
+      tryDownload: item.moduleType === "resource",
+      preferredName: displayCourseName,
+    });
+  };
+
   const renderItem = (item: LmsResourceItemNode, itemNumber: string) => {
     const canExpandFolder =
       item.moduleType === "folder" && item.children.length > 0;
@@ -275,7 +295,7 @@ export default function CourseResourcesScreen() {
           style={{ backgroundColor: moduleTone.accent }}
         />
 
-        <View className="flex-row items-start gap-3 px-3 py-3">
+        <View className="flex-row items-start gap-3 px-3 py-2.5">
           <View
             className="mt-0.5 h-8 w-8 items-center justify-center rounded-full"
             style={{
@@ -289,12 +309,7 @@ export default function CourseResourcesScreen() {
 
           <Pressable
             className="flex-1"
-            onPress={() =>
-              void openExternal(item.url, {
-                tryDownload: item.moduleType === "resource",
-                preferredName: displayCourseName,
-              })
-            }
+            onPress={() => openItem(item)}
           >
             <View className="flex-row items-center gap-2">
               <View
@@ -323,16 +338,16 @@ export default function CourseResourcesScreen() {
               </Text>
             </View>
 
-            <View className="mt-2 flex-row flex-wrap items-center gap-2">
+            <View className="mt-1.5 flex-row flex-wrap items-center gap-2">
               <View
-                className="rounded-full border px-2.5 py-1"
+                className="rounded-full border px-2 py-[3px]"
                 style={{
                   backgroundColor: theme.background,
                   borderColor: theme.border,
                 }}
               >
                 <Text
-                  className="text-[10px] font-semibold uppercase tracking-[0.4px]"
+                  className="text-[10px] font-semibold uppercase tracking-[0.35px]"
                   style={{ color: theme.textSecondary }}
                 >
                   {moduleLabel(item)}
@@ -404,12 +419,7 @@ export default function CourseResourcesScreen() {
                 borderColor: theme.border,
                 borderWidth: 1,
               }}
-              onPress={() =>
-                void openExternal(item.url, {
-                  tryDownload: item.moduleType === "resource",
-                  preferredName: displayCourseName,
-                })
-              }
+              onPress={() => openItem(item)}
             >
               {isItemDownloading ? (
                 <ActivityIndicator size="small" color={theme.icon} />
@@ -565,17 +575,17 @@ export default function CourseResourcesScreen() {
               {displayCourseName}
             </Text>
 
-            <View className="mt-3 flex-row flex-wrap items-center gap-2">
+            <View className="mt-2.5 flex-row flex-wrap items-center gap-2">
               <View
-                className="rounded-full border px-3 py-1.5"
+                className="rounded-full border px-2.5 py-1"
                 style={{
                   backgroundColor: theme.backgroundSecondary,
                   borderColor: theme.border,
                 }}
               >
-                <View className="flex-row items-end gap-1">
+                <View className="flex-row items-center gap-1.5">
                   <Text
-                    className="text-[14px] font-bold leading-[16px]"
+                    className="text-[13px] font-bold leading-[15px]"
                     style={{
                       color: theme.text,
                       fontVariant: ["tabular-nums"],
@@ -584,7 +594,7 @@ export default function CourseResourcesScreen() {
                     {totalSections}
                   </Text>
                   <Text
-                    className="text-[10px] font-semibold uppercase tracking-[0.5px]"
+                    className="text-[10px] font-semibold uppercase tracking-[0.4px]"
                     style={{ color: theme.textSecondary }}
                   >
                     {pluralize(totalSections, "section", "sections")}
@@ -592,15 +602,15 @@ export default function CourseResourcesScreen() {
                 </View>
               </View>
               <View
-                className="rounded-full border px-3 py-1.5"
+                className="rounded-full border px-2.5 py-1"
                 style={{
                   backgroundColor: theme.backgroundSecondary,
                   borderColor: theme.border,
                 }}
               >
-                <View className="flex-row items-end gap-1">
+                <View className="flex-row items-center gap-1.5">
                   <Text
-                    className="text-[14px] font-bold leading-[16px]"
+                    className="text-[13px] font-bold leading-[15px]"
                     style={{
                       color: theme.text,
                       fontVariant: ["tabular-nums"],
@@ -609,7 +619,7 @@ export default function CourseResourcesScreen() {
                     {totalItems}
                   </Text>
                   <Text
-                    className="text-[10px] font-semibold uppercase tracking-[0.5px]"
+                    className="text-[10px] font-semibold uppercase tracking-[0.4px]"
                     style={{ color: theme.textSecondary }}
                   >
                     {pluralize(totalItems, "resource", "resources")}
@@ -716,7 +726,7 @@ export default function CourseResourcesScreen() {
               return (
                 <View
                   key={section.id}
-                  className="overflow-hidden rounded-[24px] border"
+                  className="overflow-hidden rounded-[22px] border"
                   style={{
                     borderColor: theme.border,
                     backgroundColor: theme.backgroundSecondary,
@@ -728,47 +738,48 @@ export default function CourseResourcesScreen() {
                   />
 
                   <Pressable
-                    className="flex-row items-center justify-between px-4 py-3"
+                    className="flex-row items-center justify-between px-4 py-2.5"
                     onPress={() => toggleNodeExpanded(courseId, key)}
                   >
-                    <View className="flex-1 pr-2">
-                      <View className="flex-row items-center gap-2">
-                        <View
-                          className="h-8 min-w-[42px] items-center justify-center rounded-lg px-2"
+                    <View className="flex-1 flex-row items-center gap-2 pr-3">
+                      <View
+                        className="h-8 min-w-[44px] items-center justify-center rounded-lg px-2"
+                        style={{
+                          backgroundColor: theme.background,
+                          borderColor: theme.border,
+                          borderWidth: 1,
+                        }}
+                      >
+                        <Text
+                          className="text-[12px] font-bold tracking-[0.6px]"
                           style={{
-                            backgroundColor: theme.background,
-                            borderColor: theme.border,
-                            borderWidth: 1,
+                            color: theme.textSecondary,
+                            fontVariant: ["tabular-nums"],
                           }}
                         >
-                          <Text
-                            className="text-[12px] font-bold tracking-[0.6px]"
-                            style={{
-                              color: theme.textSecondary,
-                              fontVariant: ["tabular-nums"],
-                            }}
-                          >
-                            {sectionOrdinal}
-                          </Text>
-                        </View>
-                        <Text
-                          className="text-[16px] font-bold"
-                          style={{ color: theme.text }}
-                        >
-                          {section.title}
+                          {sectionOrdinal}
                         </Text>
                       </View>
+                      <Text
+                        className="flex-1 text-[16px] font-bold"
+                        style={{ color: theme.text }}
+                        numberOfLines={1}
+                      >
+                        {section.title}
+                      </Text>
+                    </View>
 
+                    <View className="flex-row items-center gap-2">
                       <View
-                        className="mt-2 self-start rounded-full border px-3 py-1.5"
+                        className="rounded-full border px-2.5 py-1"
                         style={{
                           backgroundColor: theme.background,
                           borderColor: theme.border,
                         }}
                       >
-                        <View className="flex-row items-end gap-1">
+                        <View className="flex-row items-center gap-1">
                           <Text
-                            className="text-[13px] font-bold leading-[15px]"
+                            className="text-[12px] font-bold leading-[14px]"
                             style={{
                               color: theme.text,
                               fontVariant: ["tabular-nums"],
@@ -777,28 +788,27 @@ export default function CourseResourcesScreen() {
                             {section.items.length}
                           </Text>
                           <Text
-                            className="text-[10px] font-semibold uppercase tracking-[0.45px]"
+                            className="text-[10px] font-semibold uppercase tracking-[0.4px]"
                             style={{ color: theme.textSecondary }}
                           >
                             {pluralize(section.items.length, "item", "items")}
                           </Text>
                         </View>
                       </View>
-                    </View>
-
-                    <View
-                      className="h-8 w-8 items-center justify-center rounded-full"
-                      style={{
-                        backgroundColor: theme.background,
-                        borderColor: theme.border,
-                        borderWidth: 1,
-                      }}
-                    >
-                      <Ionicons
-                        name={expanded ? "chevron-up" : "chevron-down"}
-                        size={18}
-                        color={theme.icon}
-                      />
+                      <View
+                        className="h-8 w-8 items-center justify-center rounded-full"
+                        style={{
+                          backgroundColor: theme.background,
+                          borderColor: theme.border,
+                          borderWidth: 1,
+                        }}
+                      >
+                        <Ionicons
+                          name={expanded ? "chevron-up" : "chevron-down"}
+                          size={18}
+                          color={theme.icon}
+                        />
+                      </View>
                     </View>
                   </Pressable>
 
