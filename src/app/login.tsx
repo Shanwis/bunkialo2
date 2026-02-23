@@ -4,19 +4,18 @@ import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth-store";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  InteractionManager,
   Platform,
   Pressable,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
-import {
-  KeyboardAwareScrollView,
-} from "react-native-keyboard-controller";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface LoginTheme {
@@ -69,12 +68,21 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [usernameFocused, setUsernameFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [gradientReady, setGradientReady] = useState(false);
   const { login, isLoading, error, setError } = useAuthStore();
   const { width, height } = useWindowDimensions();
   const heroProgress = useRef(new Animated.Value(0)).current;
   const cardProgress = useRef(new Animated.Value(0)).current;
   const isLandscape = width > height;
   const isCompactHeight = height < 780;
+
+  // defer gradient mount until after initial layout/animations
+  useEffect(() => {
+    const handle = InteractionManager.runAfterInteractions(() => {
+      setGradientReady(true);
+    });
+    return () => handle.cancel();
+  }, []);
 
   useEffect(() => {
     heroProgress.setValue(0);
@@ -97,23 +105,23 @@ export default function LoginScreen() {
     ]).start();
   }, [cardProgress, heroProgress]);
 
-  const clearErrorIfNeeded = () => {
-    if (error) {
-      setError(null);
-    }
-  };
+  const handleUsernameChange = useCallback(
+    (value: string) => {
+      if (error) setError(null);
+      setUsername(value);
+    },
+    [error, setError],
+  );
 
-  const handleUsernameChange = (value: string) => {
-    clearErrorIfNeeded();
-    setUsername(value);
-  };
+  const handlePasswordChange = useCallback(
+    (value: string) => {
+      if (error) setError(null);
+      setPassword(value);
+    },
+    [error, setError],
+  );
 
-  const handlePasswordChange = (value: string) => {
-    clearErrorIfNeeded();
-    setPassword(value);
-  };
-
-  const handleLogin = async () => {
+  const handleLogin = useCallback(async () => {
     const trimmedUsername = username.trim();
     const trimmedPassword = password.trim();
 
@@ -123,11 +131,14 @@ export default function LoginScreen() {
     }
 
     await login(trimmedUsername, password);
-  };
+  }, [username, password, login, setError]);
 
-  const canSubmit = Boolean(username.trim() && password.trim()) && !isLoading;
-  const hasUsername = Boolean(username.trim());
-  const hasPassword = Boolean(password.trim());
+  const hasUsername = useMemo(() => Boolean(username.trim()), [username]);
+  const hasPassword = useMemo(() => Boolean(password.trim()), [password]);
+  const canSubmit = useMemo(
+    () => hasUsername && hasPassword && !isLoading,
+    [hasUsername, hasPassword, isLoading],
+  );
   const theme = LOGIN_THEME;
   const heroAnimatedStyle = {
     opacity: heroProgress,
@@ -161,15 +172,19 @@ export default function LoginScreen() {
   return (
     <View className="flex-1 bg-black">
       <StatusBar style="light" />
-      <GrainyGradient
-        colors={["#111113", "#1B1B20", "#26262C", "#16161A"]}
-        speed={3.2}
-        intensity={0.13}
-        size={1.8}
-        amplitude={0.16}
-        brightness={0.02}
-        style={styles.absoluteFill}
-      />
+      {gradientReady && (
+        <GrainyGradient
+          colors={["#111113", "#1B1B20", "#26262C", "#16161A"]}
+          speed={3.2}
+          intensity={0.13}
+          size={1.8}
+          amplitude={0.16}
+          brightness={0.02}
+          resolutionScale={0.5}
+          settleMs={3000}
+          style={styles.absoluteFill}
+        />
+      )}
       <View className="absolute inset-0 bg-black/28" />
 
       <SafeAreaView
@@ -191,7 +206,9 @@ export default function LoginScreen() {
           bottomOffset={24}
           extraKeyboardSpace={32}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardDismissMode={
+            Platform.OS === "ios" ? "interactive" : "on-drag"
+          }
           showsVerticalScrollIndicator={false}
         >
           <View
@@ -201,260 +218,260 @@ export default function LoginScreen() {
               isLandscape && styles.contentShellLandscape,
             ]}
           >
-              <Animated.View
-                className="gap-4"
-                style={[
-                  heroAnimatedStyle,
-                  styles.heroBlock,
-                  isLandscape && styles.heroBlockLandscape,
-                ]}
-              >
-                <View className="self-start rounded-full border border-zinc-700/55 bg-black/40 px-4 py-2">
-                  <Text className="text-[11px] font-semibold uppercase tracking-[2.6px] text-zinc-300">
-                    sign-in
-                  </Text>
-                </View>
+            <Animated.View
+              className="gap-4"
+              style={[
+                heroAnimatedStyle,
+                styles.heroBlock,
+                isLandscape && styles.heroBlockLandscape,
+              ]}
+            >
+              <View className="self-start rounded-full border border-zinc-700/55 bg-black/40 px-4 py-2">
+                <Text className="text-[11px] font-semibold uppercase tracking-[2.6px] text-zinc-300">
+                  sign-in
+                </Text>
+              </View>
 
-                <View className="gap-3">
-                  <Text
-                    className="font-black tracking-[-2px] text-zinc-100"
-                    style={[
-                      styles.title,
-                      isCompactHeight && styles.titleCompact,
-                      isLandscape && styles.titleLandscape,
-                    ]}
-                  >
-                    Bunkialo
-                  </Text>
-                  <Text
-                    className="text-zinc-300"
-                    style={[
-                      styles.subtitle,
-                      isCompactHeight && styles.subtitleCompact,
-                      isLandscape && styles.subtitleLandscape,
-                    ]}
-                  >
-                    Sign in once to keep attendance, assignments, and reminders
-                    synced.
-                  </Text>
-                </View>
-              </Animated.View>
-
-              <Animated.View
-                className="gap-5"
-                style={[
-                  cardAnimatedStyle,
-                  styles.cardBlock,
-                  isLandscape && styles.cardBlockLandscape,
-                ]}
-              >
-                <View
-                  className="rounded-[32px] border border-zinc-700/55 bg-[#080808]/80 p-6"
-                  style={styles.formCard}
+              <View className="gap-3">
+                <Text
+                  className="font-black tracking-[-2px] text-zinc-100"
+                  style={[
+                    styles.title,
+                    isCompactHeight && styles.titleCompact,
+                    isLandscape && styles.titleLandscape,
+                  ]}
                 >
-                  <View className="gap-4">
-                    <View>
+                  Bunkialo
+                </Text>
+                <Text
+                  className="text-zinc-300"
+                  style={[
+                    styles.subtitle,
+                    isCompactHeight && styles.subtitleCompact,
+                    isLandscape && styles.subtitleLandscape,
+                  ]}
+                >
+                  Sign in once to keep attendance, assignments, and reminders
+                  synced.
+                </Text>
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              className="gap-5"
+              style={[
+                cardAnimatedStyle,
+                styles.cardBlock,
+                isLandscape && styles.cardBlockLandscape,
+              ]}
+            >
+              <View
+                className="rounded-[32px] border border-zinc-700/55 bg-[#080808]/80 p-6"
+                style={styles.formCard}
+              >
+                <View className="gap-4">
+                  <View>
+                    <View
+                      style={[
+                        styles.fieldShell,
+                        { borderColor: theme.fieldBorder },
+                        {
+                          backgroundColor: theme.fieldBackground,
+                          borderRadius: theme.fieldRadius,
+                          borderWidth: 1,
+                        },
+                        usernameFocused && styles.fieldShellFocused,
+                        usernameFocused && {
+                          borderColor: theme.fieldFocusBorder,
+                          backgroundColor: theme.fieldFocusBackground,
+                          shadowColor: theme.fieldFocusGlow,
+                        },
+                        hasUsername && styles.fieldShellFilled,
+                        hasUsername && {
+                          borderColor: theme.fieldFilledBorder,
+                          backgroundColor: theme.fieldFilledBackground,
+                        },
+                        error && styles.fieldShellError,
+                      ]}
+                    >
                       <View
+                        pointerEvents="none"
                         style={[
-                          styles.fieldShell,
-                          { borderColor: theme.fieldBorder },
+                          styles.fieldInnerHighlight,
                           {
-                            backgroundColor: theme.fieldBackground,
-                            borderRadius: theme.fieldRadius,
-                            borderWidth: 1,
+                            borderRadius: Math.max(theme.fieldRadius - 2, 8),
                           },
-                          usernameFocused && styles.fieldShellFocused,
-                          usernameFocused && {
-                            borderColor: theme.fieldFocusBorder,
-                            backgroundColor: theme.fieldFocusBackground,
-                            shadowColor: theme.fieldFocusGlow,
-                          },
-                          hasUsername && styles.fieldShellFilled,
-                          hasUsername && {
-                            borderColor: theme.fieldFilledBorder,
-                            backgroundColor: theme.fieldFilledBackground,
-                          },
-                          error && styles.fieldShellError,
                         ]}
-                      >
-                        <View
-                          pointerEvents="none"
-                          style={[
-                            styles.fieldInnerHighlight,
-                            {
-                              borderRadius: Math.max(theme.fieldRadius - 2, 8),
-                            },
-                          ]}
-                        />
-                        <MaterialCommunityIcons
-                          name={theme.iconName}
-                          size={18}
-                          color={
-                            usernameFocused || hasUsername
-                              ? theme.iconActive
-                              : theme.iconIdle
-                          }
-                          style={styles.leadingIcon}
-                        />
-                        <Input
-                          placeholder="Lms roll number"
-                          value={username}
-                          onChangeText={handleUsernameChange}
-                          onFocus={() => setUsernameFocused(true)}
-                          onBlur={() => setUsernameFocused(false)}
-                          nativeID="username"
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          autoComplete={
-                            Platform.OS === "android" ? "username" : undefined
-                          }
-                          textContentType={
-                            Platform.OS === "ios" ? "username" : undefined
-                          }
-                          importantForAutofill="yes"
-                          placeholderTextColor={theme.placeholderColor}
-                          style={[
-                            styles.fieldInput,
-                            {
-                              color: theme.textColor,
-                              paddingLeft: theme.inputPaddingLeft,
-                              paddingRight: theme.inputPaddingRight,
-                            },
-                          ]}
-                          keyboardType="default"
-                          inputMode="text"
-                          returnKeyType="next"
-                        />
-                      </View>
-                    </View>
-
-                    <View>
-                      <View
+                      />
+                      <MaterialCommunityIcons
+                        name={theme.iconName}
+                        size={18}
+                        color={
+                          usernameFocused || hasUsername
+                            ? theme.iconActive
+                            : theme.iconIdle
+                        }
+                        style={styles.leadingIcon}
+                      />
+                      <Input
+                        placeholder="Lms roll number"
+                        value={username}
+                        onChangeText={handleUsernameChange}
+                        onFocus={() => setUsernameFocused(true)}
+                        onBlur={() => setUsernameFocused(false)}
+                        nativeID="username"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete={
+                          Platform.OS === "android" ? "username" : undefined
+                        }
+                        textContentType={
+                          Platform.OS === "ios" ? "username" : undefined
+                        }
+                        importantForAutofill="yes"
+                        placeholderTextColor={theme.placeholderColor}
                         style={[
-                          styles.fieldShell,
-                          { borderColor: theme.fieldBorder },
+                          styles.fieldInput,
                           {
-                            backgroundColor: theme.fieldBackground,
-                            borderRadius: theme.fieldRadius,
-                            borderWidth: 1,
+                            color: theme.textColor,
+                            paddingLeft: theme.inputPaddingLeft,
+                            paddingRight: theme.inputPaddingRight,
                           },
-                          passwordFocused && styles.fieldShellFocused,
-                          passwordFocused && {
-                            borderColor: theme.fieldFocusBorder,
-                            backgroundColor: theme.fieldFocusBackground,
-                            shadowColor: theme.fieldFocusGlow,
-                          },
-                          hasPassword && styles.fieldShellFilled,
-                          hasPassword && {
-                            borderColor: theme.fieldFilledBorder,
-                            backgroundColor: theme.fieldFilledBackground,
-                          },
-                          error && styles.fieldShellError,
                         ]}
-                      >
-                        <View
-                          pointerEvents="none"
-                          style={[
-                            styles.fieldInnerHighlight,
-                            {
-                              borderRadius: Math.max(theme.fieldRadius - 2, 8),
-                            },
-                          ]}
-                        />
-                        <MaterialCommunityIcons
-                          name={theme.lockName}
-                          size={18}
-                          color={
-                            passwordFocused || hasPassword
-                              ? theme.iconActive
-                              : theme.iconIdle
-                          }
-                          style={styles.leadingIcon}
-                        />
-                        <Input
-                          placeholder="Lms password"
-                          value={password}
-                          onChangeText={handlePasswordChange}
-                          onFocus={() => setPasswordFocused(true)}
-                          onBlur={() => setPasswordFocused(false)}
-                          nativeID="password"
-                          secureTextEntry={!showPassword}
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          autoComplete={
-                            Platform.OS === "android" ? "password" : undefined
-                          }
-                          textContentType={
-                            Platform.OS === "ios" ? "password" : undefined
-                          }
-                          importantForAutofill="yes"
-                          placeholderTextColor={theme.placeholderColor}
-                          style={[
-                            styles.fieldInput,
-                            {
-                              color: theme.textColor,
-                              paddingLeft: theme.inputPaddingLeft,
-                              paddingRight: 54,
-                            },
-                          ]}
-                          returnKeyType="go"
-                          onSubmitEditing={() => {
-                            if (canSubmit) {
-                              void handleLogin();
-                            }
-                          }}
-                        />
-                        <Pressable
-                          onPress={() => setShowPassword((prev) => !prev)}
-                          style={[
-                            styles.eyeButton,
-                            {
-                              borderColor: theme.eyeBorder,
-                              backgroundColor: theme.eyeBackground,
-                            },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            showPassword ? "Hide password" : "Show password"
-                          }
-                        >
-                          <MaterialCommunityIcons
-                            name={
-                              showPassword ? "eye-off-outline" : "eye-outline"
-                            }
-                            size={18}
-                            color={showPassword ? theme.eyeColor : "#A1A1AA"}
-                          />
-                        </Pressable>
-                      </View>
+                        keyboardType="default"
+                        inputMode="text"
+                        returnKeyType="next"
+                      />
                     </View>
-
-                    {error ? (
-                      <View className="flex-row items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2.5">
-                        <MaterialCommunityIcons
-                          name="alert-circle-outline"
-                          size={16}
-                          color="#FCA5A5"
-                        />
-                        <Text className="flex-1 text-xs leading-5 text-red-200">
-                          {error}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    <Button
-                      title="Sign In"
-                      onPress={handleLogin}
-                      loading={isLoading}
-                      disabled={!canSubmit}
-                    />
-
-                    <Text className="pt-2 text-center text-[11px] text-zinc-500">
-                      Credentials are encrypted and stored locally.
-                    </Text>
                   </View>
+
+                  <View>
+                    <View
+                      style={[
+                        styles.fieldShell,
+                        { borderColor: theme.fieldBorder },
+                        {
+                          backgroundColor: theme.fieldBackground,
+                          borderRadius: theme.fieldRadius,
+                          borderWidth: 1,
+                        },
+                        passwordFocused && styles.fieldShellFocused,
+                        passwordFocused && {
+                          borderColor: theme.fieldFocusBorder,
+                          backgroundColor: theme.fieldFocusBackground,
+                          shadowColor: theme.fieldFocusGlow,
+                        },
+                        hasPassword && styles.fieldShellFilled,
+                        hasPassword && {
+                          borderColor: theme.fieldFilledBorder,
+                          backgroundColor: theme.fieldFilledBackground,
+                        },
+                        error && styles.fieldShellError,
+                      ]}
+                    >
+                      <View
+                        pointerEvents="none"
+                        style={[
+                          styles.fieldInnerHighlight,
+                          {
+                            borderRadius: Math.max(theme.fieldRadius - 2, 8),
+                          },
+                        ]}
+                      />
+                      <MaterialCommunityIcons
+                        name={theme.lockName}
+                        size={18}
+                        color={
+                          passwordFocused || hasPassword
+                            ? theme.iconActive
+                            : theme.iconIdle
+                        }
+                        style={styles.leadingIcon}
+                      />
+                      <Input
+                        placeholder="Lms password"
+                        value={password}
+                        onChangeText={handlePasswordChange}
+                        onFocus={() => setPasswordFocused(true)}
+                        onBlur={() => setPasswordFocused(false)}
+                        nativeID="password"
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete={
+                          Platform.OS === "android" ? "password" : undefined
+                        }
+                        textContentType={
+                          Platform.OS === "ios" ? "password" : undefined
+                        }
+                        importantForAutofill="yes"
+                        placeholderTextColor={theme.placeholderColor}
+                        style={[
+                          styles.fieldInput,
+                          {
+                            color: theme.textColor,
+                            paddingLeft: theme.inputPaddingLeft,
+                            paddingRight: 54,
+                          },
+                        ]}
+                        returnKeyType="go"
+                        onSubmitEditing={() => {
+                          if (canSubmit) {
+                            void handleLogin();
+                          }
+                        }}
+                      />
+                      <Pressable
+                        onPress={() => setShowPassword((prev) => !prev)}
+                        style={[
+                          styles.eyeButton,
+                          {
+                            borderColor: theme.eyeBorder,
+                            backgroundColor: theme.eyeBackground,
+                          },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                      >
+                        <MaterialCommunityIcons
+                          name={
+                            showPassword ? "eye-off-outline" : "eye-outline"
+                          }
+                          size={18}
+                          color={showPassword ? theme.eyeColor : "#A1A1AA"}
+                        />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {error ? (
+                    <View className="flex-row items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2.5">
+                      <MaterialCommunityIcons
+                        name="alert-circle-outline"
+                        size={16}
+                        color="#FCA5A5"
+                      />
+                      <Text className="flex-1 text-xs leading-5 text-red-200">
+                        {error}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <Button
+                    title="Sign In"
+                    onPress={handleLogin}
+                    loading={isLoading}
+                    disabled={!canSubmit}
+                  />
+
+                  <Text className="pt-2 text-center text-[11px] text-zinc-500">
+                    Credentials are encrypted and stored locally.
+                  </Text>
                 </View>
-              </Animated.View>
+              </View>
+            </Animated.View>
           </View>
         </KeyboardAwareScrollView>
       </SafeAreaView>

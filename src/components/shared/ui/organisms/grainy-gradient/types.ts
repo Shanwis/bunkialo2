@@ -14,6 +14,10 @@ interface IGrainyGradient {
   amplitude?: number;
   brightness?: number;
   style?: StyleProp<ViewStyle>;
+  /** Render at reduced resolution (0-1), stretched to full size. Default 0.5 */
+  resolutionScale?: number;
+  /** Stop animating after this many ms. 0 = never stop. Default 3000 */
+  settleMs?: number;
 }
 
 export type { IGrainyGradient, GrainyGradientColors };

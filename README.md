@@ -2,6 +2,8 @@
 
 Bunkialo is an Expo React Native app for IIIT Kottayam students that aggregates Moodle attendance, assignment timeline, timetable, mess menu, and utility tools.
 
+Bunkialo landing is the next js onboarding page for Bunkialo, in bunkialo-landing folder.
+
 ## License
 
 This project is licensed under **GPL-3.0**.
@@ -13,7 +15,6 @@ meaning: if you fork and distribute a modified version, you must also provide so
 ### Prerequisites
 
 - Bun
-- Node.js 20+
 - Expo CLI / EAS CLI
 
 ### Install
@@ -39,9 +40,11 @@ bunx expo start
 
 ## Scripts
 
-- `node src/scripts/test-scraper.mjs`
-- `node src/scripts/test-dashboard.mjs`
-- `node src/scripts/test-timetable-logic.mjs`
+- `bun run src/scripts/test-scraper.mjs`
+- `bun run src/scripts/test-dashboard.mjs`
+- `bun run src/scripts/test-resources-scraper.mjs`
+- `bun run src/scripts/test-lms-download.mjs`
+- `bun run src/scripts/test-timetable-logic.mjs`
 
 ## Contributing
 
