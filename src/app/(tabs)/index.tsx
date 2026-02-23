@@ -317,7 +317,7 @@ export default function DashboardScreen() {
               },
               {
                 icon: "open-in-new",
-                label: "Outpass",
+                label: "Outpass-RFID",
                 color: theme.text,
                 style: { backgroundColor: theme.backgroundSecondary },
                 labelStyle: actionLabelStyle,
@@ -325,6 +325,18 @@ export default function DashboardScreen() {
                 onPress: () => {
                   setShowFabMenu(false);
                   Linking.openURL("https://outpass.iiitkottayam.ac.in/app");
+                },
+              },
+              {
+                icon: "open-in-new",
+                label: "Outpass-fingerprint",
+                color: theme.text,
+                style: { backgroundColor: theme.backgroundSecondary },
+                labelStyle: actionLabelStyle,
+                containerStyle: actionContainerStyle,
+                onPress: () => {
+                  setShowFabMenu(false);
+                  Linking.openURL("https://gatepassstud.iiitkottayam.ac.in/index.php");
                 },
               },
               {
