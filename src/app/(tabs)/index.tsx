@@ -54,7 +54,7 @@ export default function DashboardScreen() {
     fetchDashboard,
     hasHydrated,
   } = useDashboardStore();
-  const { isOffline, setOffline } = useAuthStore();
+  const { isOffline, setOffline, username } = useAuthStore();
   const refreshIntervalMinutes = useSettingsStore(
     (state) => state.refreshIntervalMinutes,
   );
@@ -139,6 +139,90 @@ export default function DashboardScreen() {
   };
   const themeIconName =
     isDark ? "moon-outline" : "sunny-outline";
+
+  const isOldBatch = username?.startsWith("2022") || username?.startsWith("2023");
+
+  const fabActions = [
+    {
+      icon: "wifi",
+      label: "WiFix",
+      color: theme.text,
+      style: { backgroundColor: theme.backgroundSecondary },
+      labelStyle: actionLabelStyle,
+      containerStyle: actionContainerStyle,
+      onPress: () => {
+        setShowFabMenu(false);
+        router.push("/wifix");
+      },
+    },
+    {
+      icon: "calculator-variant",
+      label: "GPA Calculator",
+      color: theme.text,
+      style: { backgroundColor: theme.backgroundSecondary },
+      labelStyle: actionLabelStyle,
+      containerStyle: actionContainerStyle,
+      onPress: () => {
+        setShowFabMenu(false);
+        router.push("/gpa");
+      },
+    },
+    ...(isOldBatch
+      ? [
+        {
+          icon: "open-in-new",
+          label: "Outpass-RFID",
+          color: theme.text,
+          style: { backgroundColor: theme.backgroundSecondary },
+          labelStyle: actionLabelStyle,
+          containerStyle: actionContainerStyle,
+          onPress: () => {
+            setShowFabMenu(false);
+            Linking.openURL("https://outpass.iiitkottayam.ac.in/app");
+          },
+        },
+        {
+          icon: "open-in-new",
+          label: "Outpass-fingerprint",
+          color: theme.text,
+          style: { backgroundColor: theme.backgroundSecondary },
+          labelStyle: actionLabelStyle,
+          containerStyle: actionContainerStyle,
+          onPress: () => {
+            setShowFabMenu(false);
+            Linking.openURL(
+              "https://gatepassstud.iiitkottayam.ac.in/index.php",
+            );
+          },
+        },
+      ]
+      : [
+        {
+          icon: "open-in-new",
+          label: "Outpass",
+          color: theme.text,
+          style: { backgroundColor: theme.backgroundSecondary },
+          labelStyle: actionLabelStyle,
+          containerStyle: actionContainerStyle,
+          onPress: () => {
+            setShowFabMenu(false);
+            Linking.openURL("https://outpass.iiitkottayam.ac.in/app");
+          },
+        },
+      ]),
+    {
+      icon: "calendar-month",
+      label: "Academic Calendar",
+      color: theme.text,
+      style: { backgroundColor: theme.backgroundSecondary },
+      labelStyle: actionLabelStyle,
+      containerStyle: actionContainerStyle,
+      onPress: () => {
+        setShowFabMenu(false);
+        router.push("/acad-cal");
+      },
+    },
+  ];
 
   return (
     <Container>
@@ -290,68 +374,7 @@ export default function DashboardScreen() {
                 ? Colors.gray[800]
                 : theme.backgroundSecondary,
             }}
-            actions={[
-              {
-                icon: "wifi",
-                label: "WiFix",
-                color: theme.text,
-                style: { backgroundColor: theme.backgroundSecondary },
-                labelStyle: actionLabelStyle,
-                containerStyle: actionContainerStyle,
-                onPress: () => {
-                  setShowFabMenu(false);
-                  router.push("/wifix");
-                },
-              },
-              {
-                icon: "calculator-variant",
-                label: "GPA Calculator",
-                color: theme.text,
-                style: { backgroundColor: theme.backgroundSecondary },
-                labelStyle: actionLabelStyle,
-                containerStyle: actionContainerStyle,
-                onPress: () => {
-                  setShowFabMenu(false);
-                  router.push("/gpa");
-                },
-              },
-              {
-                icon: "open-in-new",
-                label: "Outpass-RFID",
-                color: theme.text,
-                style: { backgroundColor: theme.backgroundSecondary },
-                labelStyle: actionLabelStyle,
-                containerStyle: actionContainerStyle,
-                onPress: () => {
-                  setShowFabMenu(false);
-                  Linking.openURL("https://outpass.iiitkottayam.ac.in/app");
-                },
-              },
-              {
-                icon: "open-in-new",
-                label: "Outpass-fingerprint",
-                color: theme.text,
-                style: { backgroundColor: theme.backgroundSecondary },
-                labelStyle: actionLabelStyle,
-                containerStyle: actionContainerStyle,
-                onPress: () => {
-                  setShowFabMenu(false);
-                  Linking.openURL("https://gatepassstud.iiitkottayam.ac.in/index.php");
-                },
-              },
-              {
-                icon: "calendar-month",
-                label: "Academic Calendar",
-                color: theme.text,
-                style: { backgroundColor: theme.backgroundSecondary },
-                labelStyle: actionLabelStyle,
-                containerStyle: actionContainerStyle,
-                onPress: () => {
-                  setShowFabMenu(false);
-                  router.push("/acad-cal");
-                },
-              },
-            ]}
+            actions={fabActions}
             onStateChange={({ open }) => setShowFabMenu(open)}
           />
         </Portal>
