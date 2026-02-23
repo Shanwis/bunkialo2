@@ -104,6 +104,10 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
       ?.config?.color || fallbackColor;
 
   const openOnLms = async () => {
+    if (!event.url?.trim()) {
+      Toast.show("No LMS link available for this event", { type: "error" });
+      return;
+    }
     try {
       const canOpen = await Linking.canOpenURL(event.url);
       if (!canOpen) {

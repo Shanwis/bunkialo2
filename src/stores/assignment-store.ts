@@ -52,6 +52,7 @@ type AssignmentStore = AssignmentStoreState & AssignmentStoreActions;
 
 const detailRequestsInFlight = new Map<string, Promise<AssignmentDetails>>();
 const editRequestsInFlight = new Map<string, Promise<AssignmentEditSession>>();
+let assignmentGeneration = 0;
 
 const isStale = (lastSyncTime: number | null): boolean => {
   if (!lastSyncTime) return true;
@@ -72,6 +73,7 @@ export const useAssignmentStore = create<AssignmentStore>()(
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       fetchAssignmentDetails: async (assignmentId, options) => {
+        const generationAtRequest = assignmentGeneration;
         const force = options?.force ?? false;
         const silent = options?.silent ?? false;
 
@@ -107,6 +109,9 @@ export const useAssignmentStore = create<AssignmentStore>()(
 
         try {
           const details = await request;
+          if (generationAtRequest !== assignmentGeneration) {
+            return;
+          }
           set((state) => ({
             detailsByAssignmentId: {
               ...state.detailsByAssignmentId,
@@ -125,6 +130,9 @@ export const useAssignmentStore = create<AssignmentStore>()(
             },
           }));
         } catch (error) {
+          if (generationAtRequest !== assignmentGeneration) {
+            return;
+          }
           const message =
             error instanceof Error
               ? error.message
@@ -151,6 +159,7 @@ export const useAssignmentStore = create<AssignmentStore>()(
       },
 
       startEditSession: async (assignmentId, options) => {
+        const generationAtRequest = assignmentGeneration;
         const force = options?.force ?? false;
         const existing = get().editSessionByAssignmentId[assignmentId];
         if (!force && existing && !isStale(existing.fetchedAt)) {
@@ -176,6 +185,9 @@ export const useAssignmentStore = create<AssignmentStore>()(
 
         try {
           const session = await request;
+          if (generationAtRequest !== assignmentGeneration) {
+            return null;
+          }
           set((state) => ({
             editSessionByAssignmentId: {
               ...state.editSessionByAssignmentId,
@@ -192,6 +204,9 @@ export const useAssignmentStore = create<AssignmentStore>()(
           }));
           return session;
         } catch (error) {
+          if (generationAtRequest !== assignmentGeneration) {
+            return null;
+          }
           const message =
             error instanceof Error
               ? error.message
@@ -303,6 +318,7 @@ export const useAssignmentStore = create<AssignmentStore>()(
       },
 
       clearAssignmentCache: () => {
+        assignmentGeneration += 1;
         detailRequestsInFlight.clear();
         editRequestsInFlight.clear();
         set({

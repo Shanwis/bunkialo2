@@ -100,6 +100,9 @@ const parseFolderFiles = async (
 ): Promise<LmsResourceFileNode[]> => {
   try {
     const response = await api.get<string>(folderUrl);
+    if (isLoginHtml(response.data)) {
+      throw new Error("Session expired while fetching folder resources");
+    }
     const doc = parseHtml(response.data);
     const links = querySelectorAll(doc, "main .foldertree a[href], .foldertree a[href]");
 
@@ -129,6 +132,12 @@ const parseFolderFiles = async (
 
     return files;
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("Session expired while fetching folder resources")
+    ) {
+      throw error;
+    }
     debug.scraper(`Failed to parse folder files for ${folderUrl}: ${String(error)}`);
     return [];
   }

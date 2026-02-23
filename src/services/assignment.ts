@@ -543,6 +543,8 @@ export const uploadAssignmentDraftFile = async (
   }
 
   const uploadForm = new FormData();
+  // React Native FormData accepts a file descriptor object { uri, name, type }.
+  // The double-cast satisfies DOM typings that expect a Blob.
   uploadForm.append("repo_upload_file", {
     uri: normalizedFile.uri,
     name: normalizedFile.name,
@@ -629,6 +631,7 @@ export const submitAssignment = async (
   let draftItemIdToSubmit = session.draftItemId;
   const maxFilesLimit =
     session.maxFiles !== null && session.maxFiles >= 0 ? session.maxFiles : null;
+  let uploadSession: AssignmentEditSession = session;
   if (files.length > 0) {
     if (!session.supportsFileSubmission || !session.draftItemId) {
       return {
@@ -648,10 +651,14 @@ export const submitAssignment = async (
 
     for (const file of files) {
       try {
-        const uploadedDraft = await uploadAssignmentDraftFile(session, file, {
+        const uploadedDraft = await uploadAssignmentDraftFile(uploadSession, file, {
           onProgress: options?.onProgress,
         });
         draftItemIdToSubmit = uploadedDraft.itemId;
+        uploadSession = {
+          ...uploadSession,
+          draftItemId: uploadedDraft.itemId,
+        };
       } catch (error) {
         return {
           success: false,
