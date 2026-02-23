@@ -265,7 +265,7 @@ export const MESS_MENU: DayMenu[] = [
         "Rasam",
       ]),
       createMeal("snacks", [
-        "Dil Pasand",
+        "Cream Bun",
         "Bread",
         "Jam",
         "Butter",
