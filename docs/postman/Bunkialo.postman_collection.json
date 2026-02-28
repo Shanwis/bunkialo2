@@ -1,0 +1,1027 @@
+{
+  "info": {
+    "_postman_id": "b98255a4-16bc-49ae-90d2-b4a9a5915dc0",
+    "name": "Bunkialo",
+    "description": "Moodle LMS API for IIIT Kottayam. Run Login first, then other folders. Base URL: 20XX username maps to lmsugXX.iiitkottayam.ac.in",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "40098174",
+    "_collection_link": "https://go.postman.co/collection/40098174-b98255a4-16bc-49ae-90d2-b4a9a5915dc0?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Login",
+      "item": [
+        {
+          "name": "1. Get Login token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const patterns = [/name=[\"']logintoken[\"'][^>]*value=[\"']([^\"']+)[\"']/i,/value=[\"']([^\"']+)[\"'][^>]*name=[\"']logintoken[\"']/i,/[\"']logintoken[\"']\\s*[:=]\\s*[\"']([^\"']+)[\"']/i];",
+                  "let token = null;",
+                  "for (const re of patterns) { const m = html.match(re); if (m && m[1]) { token = m[1]; break; } }",
+                  "if (token) { pm.collectionVariables.set('logintoken', token); console.log('logintoken:', token); pm.test('logintoken extracted: ' + token.substring(0, 20) + '...', () => pm.expect(token).to.be.a('string')); } else { console.log('logintoken: NOT FOUND'); pm.test('logintoken extracted', () => pm.expect.fail('logintoken not found')); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile"
+              },
+              {
+                "key": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/login/index.php",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login",
+                "index.php"
+              ]
+            },
+            "description": "Fetches the login page HTML.\n\n**Output**: initial cookies and a CSRF token (logintoken) extracted from a hidden form field. The token is required for the next step."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Submit Login Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const hasLoginForm = /name=[\"']logintoken[\"']|id=[\"']login[\"']/i.test(html);",
+                  "const hasUserMenu = /usermenu|userloggedinas|loggedin-user/i.test(html);",
+                  "const hasLogoutLink = /href=[\"'][^\"']*logout/i.test(html);",
+                  "const hasSesskey = /\"sesskey\":\"[^\"]+\"/i.test(html);",
+                  "const hasError = /loginerrors|alert-danger|loginerrormessage/i.test(html);",
+                  "const success = (hasUserMenu || hasLogoutLink || (hasSesskey && !hasLoginForm)) && !hasError;",
+                  "pm.test('Login successful', () => pm.expect(success).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile"
+              },
+              {
+                "key": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "anchor",
+                  "value": ""
+                },
+                {
+                  "key": "logintoken",
+                  "value": "{{logintoken}}"
+                },
+                {
+                  "key": "username",
+                  "value": "{{vault:lms-username}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{vault:lms-password}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login/index.php",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login",
+                "index.php"
+              ]
+            },
+            "description": "Posts credentials with the login token.  \n**Output**: session cookies in Set-Cookie header. On success, redirects to dashboard. On failure, returns login page with error message."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get Sesskey",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const hasUserMenu = /usermenu|userloggedinas|loggedin-user/i.test(html);",
+                  "const hasLogoutLink = /href=[\"'][^\"']*logout/i.test(html);",
+                  "const hasSesskey = /\"sesskey\":\"[^\"]+\"/i.test(html);",
+                  "const hasLoginForm = /name=[\"']logintoken[\"']|id=[\"']login[\"']/i.test(html);",
+                  "const valid = hasUserMenu || hasLogoutLink || (hasSesskey && !hasLoginForm);",
+                  "pm.test('Session valid', () => pm.expect(valid).to.be.true);",
+                  "const m = html.match(/\"sesskey\":\"([^\"]+)\"/);",
+                  "if (m) pm.collectionVariables.set('sesskey', m[1]);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile"
+              },
+              {
+                "key": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my",
+                ""
+              ]
+            },
+            "description": "Loads the user dashboard.  \n**Output**: HTML with embedded sesskey.  \nCookies vs sesskey: cookies are sent automatically by the browser and prove who you are (session identity). Sesskey is a CSRF token that must be sent explicitly in the URL for state-changing routes (e.g. lib/ajax/service.php). It prevents cross-site requests from using your session. Both are required for Moodle AJAX API calls."
+          },
+          "response": []
+        }
+      ],
+      "description": "Authentication flow. Run steps 1, 2, 3 in order. Output: session cookies and sesskey for API calls."
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Timeline Events (Upcoming + Overdue)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const now = Math.floor(Date.now() / 1000);",
+                  "const past = now - 30 * 24 * 60 * 60;",
+                  "pm.collectionVariables.set('nowSec', now);",
+                  "pm.collectionVariables.set('pastSec', past);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "const upcoming = data[0]?.data?.events || [];",
+                  "const overdue = (data[1]?.data?.events || []).map(e => ({ ...e, overdue: true }));",
+                  "const all = [...overdue, ...upcoming];",
+                  "pm.test('API success', () => pm.expect(Array.isArray(data)).to.be.true);",
+                  "pm.test('No API error', () => pm.expect(data[0]?.error).to.not.be.true);",
+                  "const formatDate = (ts) => new Date(ts * 1000).toLocaleString();",
+                  "const rows = all.map(e => ({ name: e.name || e.activityname, course: e.course?.fullname || '-', due: formatDate(e.timesort || e.timestart), overdue: !!e.overdue }));",
+                  "pm.visualizer.set(`<!DOCTYPE html><html><head><meta charset=utf-8><style>body{font-family:system-ui;font-size:13px;margin:16px;color:#222;background:#fff}table{border-collapse:collapse;width:100%}th,td{padding:8px;text-align:left;border-bottom:1px solid #ddd}th{font-weight:600;color:#444}.overdue{color:#b91c1c}.upcoming{color:#15803d}</style></head><body><h2>Timeline Events</h2><p>Overdue: ${overdue.length} | Upcoming: ${upcoming.length}</p><table><tr><th>Name</th><th>Course</th><th>Due</th><th>Status</th></tr>{{#each rows}}<tr><td>{{name}}</td><td>{{course}}</td><td>{{due}}</td><td class=\"{{#if overdue}}overdue{{else}}upcoming{{/if}}\">{{#if overdue}}overdue{{else}}upcoming{{/if}}</td></tr>{{/each}}</table></body></html>`, { rows });"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"index\": 0,\n    \"methodname\": \"core_calendar_get_action_events_by_timesort\",\n    \"args\": {\n      \"limitnum\": 20,\n      \"timesortfrom\": {{nowSec}},\n      \"limittononsuspendedevents\": true\n    }\n  },\n  {\n    \"index\": 1,\n    \"methodname\": \"core_calendar_get_action_events_by_timesort\",\n    \"args\": {\n      \"limitnum\": 20,\n      \"timesortfrom\": {{pastSec}},\n      \"timesortto\": {{nowSec}},\n      \"limittononsuspendedevents\": true\n    }\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lib/ajax/service.php?sesskey={{sesskey}}&info=core_calendar_get_action_events_by_timesort",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lib",
+                "ajax",
+                "service.php"
+              ],
+              "query": [
+                {
+                  "key": "sesskey",
+                  "value": "{{sesskey}}"
+                },
+                {
+                  "key": "info",
+                  "value": "core_calendar_get_action_events_by_timesort"
+                }
+              ]
+            },
+            "description": "Calls Moodle AJAX API for calendar action events. Two batched requests: upcoming (from now) and overdue (past 30 days). Output: JSON array of events with name, course, timesort, url. Visualize tab shows a table."
+          },
+          "response": []
+        }
+      ],
+      "description": "Timeline events (assignments, quizzes, deadlines). Requires sesskey from Login step 3."
+    },
+    {
+      "name": "Courses",
+      "item": [
+        {
+          "name": "Enrolled Courses (In Progress)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const sesskey = pm.collectionVariables.get('sesskey');",
+                  "if (!sesskey) console.warn('Run Login folder first to get sesskey');"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "const courses = data[0]?.data?.courses || [];",
+                  "pm.test('API success', () => pm.expect(data[0]?.error).to.not.be.true);",
+                  "const rows = courses.map(c => ({ id: c.id, name: c.fullname || c.shortname, shortname: c.shortname, url: c.viewurl }));",
+                  "pm.visualizer.set(`<!DOCTYPE html><html><head><meta charset=utf-8><style>body{font-family:system-ui;font-size:13px;margin:16px;color:#222;background:#fff}table{border-collapse:collapse;width:100%}th,td{padding:8px;text-align:left;border-bottom:1px solid #ddd}th{font-weight:600;color:#444}a{color:#2563eb;text-decoration:none}</style></head><body><h2>Enrolled Courses (${courses.length})</h2><table><tr><th>ID</th><th>Name</th><th>Short</th></tr>{{#each rows}}<tr><td>{{id}}</td><td><a href=\"{{url}}\">{{name}}</a></td><td>{{shortname}}</td></tr>{{/each}}</table></body></html>`, { rows });"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"index\": 0,\n    \"methodname\": \"core_course_get_enrolled_courses_by_timeline_classification\",\n    \"args\": {\n      \"offset\": 0,\n      \"limit\": 0,\n      \"classification\": \"inprogress\",\n      \"sort\": \"fullname\"\n    }\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lib/ajax/service.php?sesskey={{sesskey}}&info=core_course_get_enrolled_courses_by_timeline_classification",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lib",
+                "ajax",
+                "service.php"
+              ],
+              "query": [
+                {
+                  "key": "sesskey",
+                  "value": "{{sesskey}}"
+                },
+                {
+                  "key": "info",
+                  "value": "core_course_get_enrolled_courses_by_timeline_classification"
+                }
+              ]
+            },
+            "description": "Calls Moodle AJAX API for enrolled courses with classification inprogress. Output: JSON with courses array (id, fullname, shortname, viewurl). Use course id for Attendance and Resources. Visualize tab shows a table."
+          },
+          "response": []
+        }
+      ],
+      "description": "Enrolled courses. Requires sesskey from Login."
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "Course Page (Find Attendance Module)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const m = html.match(/mod\\/attendance\\/view\\.php[^\"']*id=(\\d+)/);",
+                  "const attId = m ? m[1] : null;",
+                  "if (attId) pm.collectionVariables.set('attendanceModuleId', attId);",
+                  "pm.test('Course page loaded', () => pm.expect(html.length).to.be.above(100));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile"
+              },
+              {
+                "key": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/course/view.php?id={{courseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "course",
+                "view.php"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{courseId}}"
+                }
+              ]
+            },
+            "description": "Loads the course page.  \n**Output:** HTML. Parses links to find the attendance module id (cmid) from href containing mod/attendance/view.php. Stores it as attendanceModuleId for the next step."
+          },
+          "response": []
+        },
+        {
+          "name": "Attendance Report",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const attId = pm.collectionVariables.get('attendanceModuleId');",
+                  "if (!attId) console.warn('Run Course Page first to get attendanceModuleId');"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const cheerio = require('cheerio');",
+                  "",
+                  "pm.test(\"Response contains attendance data\", function () {",
+                  "    pm.expect(pm.response.text().length).to.be.above(100);",
+                  "});",
+                  "",
+                  "// Load the HTML response into Cheerio for accurate DOM parsing",
+                  "const $ = cheerio.load(pm.response.text());",
+                  "const records = [];",
+                  "let attended = 0;",
+                  "let total = 0;",
+                  "",
+                  "// Extract data strictly from the main attendance table",
+                  "$('table.generaltable tbody tr').each(function () {",
+                  "    const dateNodes = $(this).find('td.datecol nobr');",
+                  "    let dateText = \"\";",
+                  "    ",
+                  "    // Moodle splits Date and Time into separate <nobr> tags. We join them neatly.",
+                  "    if (dateNodes.length > 0) {",
+                  "        dateText = dateNodes.map((i, el) => $(el).text().trim()).get().join(' | ');",
+                  "    } else {",
+                  "        dateText = $(this).find('td.datecol').text().trim().replace(/\\s+/g, ' ');",
+                  "    }",
+                  "",
+                  "    if (!dateText) return; // Skip non-data rows",
+                  "",
+                  "    const description = $(this).find('td.desccol').text().trim().replace(/\\s+/g, ' ') || 'Regular class session';",
+                  "    const statusText = $(this).find('td.statuscol').text().trim();",
+                  "    const points = $(this).find('td.pointscol').text().trim();",
+                  "    ",
+                  "    let status = 'Unknown';",
+                  "    ",
+                  "    // Evaluate status logically based on points and text",
+                  "    if (points.includes('1 /') || statusText.toLowerCase() === 'present') {",
+                  "        status = 'Present';",
+                  "        attended++;",
+                  "        total++;",
+                  "    } else if (points.includes('0 /') || statusText.toLowerCase() === 'absent') {",
+                  "        status = 'Absent';",
+                  "        total++;",
+                  "    } else if (points.includes('?')) {",
+                  "        status = 'Unknown';",
+                  "    }",
+                  "",
+                  "    records.push({",
+                  "        date: dateText,",
+                  "        description: description,",
+                  "        status: status,",
+                  "        points: points",
+                  "    });",
+                  "});",
+                  "",
+                  "const pct = total > 0 ? Math.round((attended / total) * 100) : 0;",
+                  "",
+                  "// HTML/CSS Template for Premium Dark Gray & Yellow Accent Visualization",
+                  "const template = `",
+                  "<!DOCTYPE html>",
+                  "<html lang=\"en\">",
+                  "<head>",
+                  "    <meta charset=\"UTF-8\">",
+                  "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
+                  "    <style>",
+                  "        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');",
+                  "        ",
+                  "        body {",
+                  "            font-family: 'Inter', sans-serif;",
+                  "            background-color: #121212;",
+                  "            color: #e0e0e0;",
+                  "            margin: 0;",
+                  "            padding: 32px;",
+                  "        }",
+                  "        .header {",
+                  "            border-left: 4px solid #facc15;",
+                  "            padding-left: 16px;",
+                  "            margin-bottom: 32px;",
+                  "        }",
+                  "        h1 {",
+                  "            margin: 0;",
+                  "            font-size: 24px;",
+                  "            font-weight: 600;",
+                  "            color: #ffffff;",
+                  "            text-transform: uppercase;",
+                  "            letter-spacing: 1px;",
+                  "        }",
+                  "        .subtitle {",
+                  "            font-size: 14px;",
+                  "            color: #888888;",
+                  "            margin-top: 6px;",
+                  "            text-transform: uppercase;",
+                  "            letter-spacing: 2px;",
+                  "        }",
+                  "        .summary-cards {",
+                  "            display: flex;",
+                  "            gap: 20px;",
+                  "            margin-bottom: 40px;",
+                  "        }",
+                  "        .card {",
+                  "            background-color: #1a1a1a;",
+                  "            border: 1px solid #2a2a2a;",
+                  "            border-radius: 6px;",
+                  "            padding: 20px 24px;",
+                  "            flex: 1;",
+                  "            display: flex;",
+                  "            flex-direction: column;",
+                  "            position: relative;",
+                  "            overflow: hidden;",
+                  "            box-shadow: 0 4px 12px rgba(0,0,0,0.5);",
+                  "        }",
+                  "        .card::before {",
+                  "            content: '';",
+                  "            position: absolute;",
+                  "            top: 0;",
+                  "            left: 0;",
+                  "            width: 100%;",
+                  "            height: 2px;",
+                  "            background-color: #facc15;",
+                  "            opacity: 0.9;",
+                  "        }",
+                  "        .card-title {",
+                  "            font-size: 11px;",
+                  "            color: #888888;",
+                  "            text-transform: uppercase;",
+                  "            letter-spacing: 1px;",
+                  "            font-weight: 600;",
+                  "        }",
+                  "        .card-value {",
+                  "            font-size: 32px;",
+                  "            font-weight: 300;",
+                  "            color: #ffffff;",
+                  "            margin-top: 10px;",
+                  "        }",
+                  "        .accent-text {",
+                  "            color: #facc15;",
+                  "            font-weight: 400;",
+                  "        }",
+                  "        table {",
+                  "            width: 100%;",
+                  "            border-collapse: collapse;",
+                  "            background-color: #1a1a1a;",
+                  "            border-radius: 6px;",
+                  "            overflow: hidden;",
+                  "            box-shadow: 0 4px 12px rgba(0,0,0,0.5);",
+                  "            border: 1px solid #2a2a2a;",
+                  "        }",
+                  "        th, td {",
+                  "            padding: 16px 20px;",
+                  "            text-align: left;",
+                  "            font-size: 13px;",
+                  "        }",
+                  "        th {",
+                  "            background-color: #151515;",
+                  "            color: #777777;",
+                  "            font-weight: 600;",
+                  "            text-transform: uppercase;",
+                  "            font-size: 11px;",
+                  "            letter-spacing: 1px;",
+                  "            border-bottom: 1px solid #333333;",
+                  "        }",
+                  "        tr {",
+                  "            border-bottom: 1px solid #222222;",
+                  "            transition: background-color 0.2s;",
+                  "        }",
+                  "        tr:last-child {",
+                  "            border-bottom: none;",
+                  "        }",
+                  "        tr:hover {",
+                  "            background-color: #222222;",
+                  "        }",
+                  "        td.date {",
+                  "            color: #bbbbbb;",
+                  "            font-weight: 400;",
+                  "            letter-spacing: 0.5px;",
+                  "        }",
+                  "        .status {",
+                  "            display: inline-block;",
+                  "            padding: 4px 12px;",
+                  "            border-radius: 3px;",
+                  "            font-size: 11px;",
+                  "            font-weight: 600;",
+                  "            text-transform: uppercase;",
+                  "            letter-spacing: 1px;",
+                  "        }",
+                  "        .status-Present {",
+                  "            background-color: rgba(250, 204, 21, 0.08);",
+                  "            color: #facc15;",
+                  "            border: 1px solid rgba(250, 204, 21, 0.2);",
+                  "        }",
+                  "        .status-Absent {",
+                  "            background-color: rgba(136, 136, 136, 0.08);",
+                  "            color: #777777;",
+                  "            border: 1px solid rgba(136, 136, 136, 0.2);",
+                  "        }",
+                  "        .status-Unknown {",
+                  "            background-color: rgba(255, 255, 255, 0.05);",
+                  "            color: #999999;",
+                  "            border: 1px dashed rgba(255, 255, 255, 0.2);",
+                  "        }",
+                  "        .points {",
+                  "            color: #888888;",
+                  "            font-variant-numeric: tabular-nums;",
+                  "            font-family: monospace;",
+                  "            font-size: 14px;",
+                  "        }",
+                  "    </style>",
+                  "</head>",
+                  "<body>",
+                  "    <div class=\"header\">",
+                  "        <h1>Attendance Intelligence</h1>",
+                  "        <div class=\"subtitle\">System Record Analysis</div>",
+                  "    </div>",
+                  "",
+                  "    <div class=\"summary-cards\">",
+                  "        <div class=\"card\">",
+                  "            <div class=\"card-title\">Total Sessions</div>",
+                  "            <div class=\"card-value\">{{total}}</div>",
+                  "        </div>",
+                  "        <div class=\"card\">",
+                  "            <div class=\"card-title\">Sessions Attended</div>",
+                  "            <div class=\"card-value accent-text\">{{attended}}</div>",
+                  "        </div>",
+                  "        <div class=\"card\">",
+                  "            <div class=\"card-title\">Current Percentage</div>",
+                  "            <div class=\"card-value\">{{pct}}%</div>",
+                  "        </div>",
+                  "    </div>",
+                  "",
+                  "    <table>",
+                  "        <thead>",
+                  "            <tr>",
+                  "                <th>Date & Time</th>",
+                  "                <th>Description</th>",
+                  "                <th>Status</th>",
+                  "                <th>Points</th>",
+                  "            </tr>",
+                  "        </thead>",
+                  "        <tbody>",
+                  "            {{#each rows}}",
+                  "            <tr>",
+                  "                <td class=\"date\">{{date}}</td>",
+                  "                <td>{{description}}</td>",
+                  "                <td><span class=\"status status-{{status}}\">{{status}}</span></td>",
+                  "                <td class=\"points\">{{points}}</td>",
+                  "            </tr>",
+                  "            {{/each}}",
+                  "        </tbody>",
+                  "    </table>",
+                  "</body>",
+                  "</html>",
+                  "`;",
+                  "",
+                  "// Render the visualizer",
+                  "pm.visualizer.set(template, {",
+                  "    rows: records,",
+                  "    total: total,",
+                  "    attended: attended,",
+                  "    pct: pct",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile"
+              },
+              {
+                "key": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/mod/attendance/view.php?id={{attendanceModuleId}}&view=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mod",
+                "attendance",
+                "view.php"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{attendanceModuleId}}"
+                },
+                {
+                  "key": "view",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Loads the user attendance report (view=5 = user report).  \nOutput: HTML table with date, description, status, points per session. Parsed like the app: Present (1/1), Absent (0/1), Unknown (?/1). Visualize tab shows summary and table."
+          },
+          "response": []
+        }
+      ],
+      "description": "Attendance records per course. Set courseId (from Enrolled Courses). Run Course Page first to get attendanceModuleId."
+    },
+    {
+      "name": "Resources",
+      "item": [
+        {
+          "name": "Course Resources",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const baseUrl = pm.collectionVariables.get('baseUrl') || '';",
+                  "const strip = (s) => (s||'').replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim();",
+                  "const toAbs = (href) => { if(!href) return ''; if(href.startsWith('http')) return href; if(href.startsWith('//')) return 'https:'+href; if(href.startsWith('/')) return baseUrl+href; return baseUrl+'/'+href.replace(/^\\.?\\//,''); };",
+                  "const titleMatch = html.match(/<h1[^>]*>([^<]+)<\\/h1>/i);",
+                  "const courseTitle = titleMatch ? strip(titleMatch[1]) : 'Course';",
+                  "const sectionBlocks = html.split(/<li[^>]*class=\"[^\"]*section[^\"]*\"[^>]*>/i).slice(1);",
+                  "const sections = [];",
+                  "for (let i = 0; i < sectionBlocks.length; i++) {",
+                  "  const block = sectionBlocks[i];",
+                  "  const sectionTitleMatch = block.match(/<h3[^>]*sectionname[^>]*>([^<]+)<\\/h3>/i) || block.match(/<h3[^>]*>([^<]+)<\\/h3>/i);",
+                  "  const sectionTitle = sectionTitleMatch ? strip(sectionTitleMatch[1]) : 'Section ' + (i+1);",
+                  "  const activityMatches = block.match(/<li[^>]*class=\"[^\"]*activity[^\"]*\"[^>]*>[\\s\\S]*?<a[^>]*href=\"([^\"]+)\"[^>]*>([\\s\\S]*?)<\\/a>/gi) || [];",
+                  "  const items = [];",
+                  "  for (const am of activityMatches) {",
+                  "    const modMatch = am.match(/modtype_([a-z0-9_]+)/i);",
+                  "    const modType = modMatch ? modMatch[1].toLowerCase() : 'unknown';",
+                  "    const hrefMatch = am.match(/href=\"([^\"]+)\"/i);",
+                  "    const textMatch = am.match(/>([\\s\\S]*?)<\\/a>/i);",
+                  "    const url = hrefMatch ? toAbs(hrefMatch[1]) : '';",
+                  "    let title = textMatch ? strip(textMatch[1]) : '';",
+                  "    const accessHide = title.match(/^(.*?)\\s+(File|Folder|Assignment|Quiz|Forum|Attendance|Resource)$/i);",
+                  "    if (accessHide) title = accessHide[1].trim();",
+                  "    if (title) items.push({ title, modType, url });",
+                  "  }",
+                  "  if (items.length) sections.push({ title: sectionTitle, items });",
+                  "}",
+                  "",
+                  "pm.test('Course page loaded', () => pm.expect(html.length).to.be.above(100));",
+                  "",
+                  "// Prepare data with badge colors for each item",
+                  "const badgeColors = {",
+                  "  assign: '#e74c3c',",
+                  "  assignment: '#e74c3c',",
+                  "  quiz: '#9b59b6',",
+                  "  folder: '#f39c12',",
+                  "  resource: '#3498db',",
+                  "  url: '#1abc9c',",
+                  "  forum: '#2ecc71',",
+                  "  attendance: '#e67e22',",
+                  "  page: '#34495e',",
+                  "  unknown: '#95a5a6'",
+                  "};",
+                  "",
+                  "const sectionsWithColors = sections.map(function(sec) {",
+                  "  return {",
+                  "    title: sec.title,",
+                  "    itemCount: sec.items.length,",
+                  "    items: sec.items.map(function(item) {",
+                  "      return {",
+                  "        title: item.title,",
+                  "        modType: item.modType,",
+                  "        url: item.url,",
+                  "        badgeColor: badgeColors[item.modType] || badgeColors.unknown",
+                  "      };",
+                  "    })",
+                  "  };",
+                  "});",
+                  "var template = `",
+                  "<style>",
+                  "  * { box-sizing: border-box; }",
+                  "",
+                  "  body {",
+                  "    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
+                  "    margin: 0;",
+                  "    padding: 24px;",
+                  "    background: #0f1115;",
+                  "    color: #e6e6e6;",
+                  "  }",
+                  "",
+                  "  .header {",
+                  "    background: #171a21;",
+                  "    border: 1px solid #22252d;",
+                  "    padding: 28px 32px;",
+                  "    border-radius: 14px;",
+                  "    margin-bottom: 28px;",
+                  "    box-shadow: 0 8px 30px rgba(0,0,0,0.5);",
+                  "  }",
+                  "",
+                  "  .header h1 {",
+                  "    margin: 0;",
+                  "    font-size: 26px;",
+                  "    font-weight: 600;",
+                  "    color: #ffffff;",
+                  "  }",
+                  "",
+                  "  .header .subtitle {",
+                  "    margin-top: 10px;",
+                  "    font-size: 13px;",
+                  "    color: #9aa0aa;",
+                  "  }",
+                  "",
+                  "  /* Section Colors */",
+                  "  .section-card {",
+                  "    background: #15181f;",
+                  "    border-radius: 12px;",
+                  "    margin-bottom: 18px;",
+                  "    overflow: hidden;",
+                  "    transition: all 0.2s ease;",
+                  "    border: 1px solid #20242c;",
+                  "    border-left: 4px solid #3a3f4b;",
+                  "  }",
+                  "",
+                  "  .section-card.color-0 { border-left-color: #4c6ef5; }  /* blue */",
+                  "  .section-card.color-1 { border-left-color: #d6336c; }  /* crimson */",
+                  "  .section-card.color-2 { border-left-color: #20c997; }  /* teal */",
+                  "  .section-card.color-3 { border-left-color: #fab005; }  /* gold */",
+                  "  .section-card.color-4 { border-left-color: #845ef7; }  /* violet */",
+                  "  .section-card.color-5 { border-left-color: #ff922b; }  /* orange */",
+                  "",
+                  "  .section-card:hover {",
+                  "    box-shadow: 0 6px 24px rgba(0,0,0,0.4);",
+                  "    transform: translateY(-2px);",
+                  "  }",
+                  "",
+                  "  .section-header {",
+                  "    padding: 18px 22px;",
+                  "    border-bottom: 1px solid #20242c;",
+                  "    display: flex;",
+                  "    justify-content: space-between;",
+                  "    align-items: center;",
+                  "  }",
+                  "",
+                  "  .section-title {",
+                  "    font-size: 15px;",
+                  "    font-weight: 600;",
+                  "    color: #ffffff;",
+                  "    margin: 0;",
+                  "  }",
+                  "",
+                  "  .item-count {",
+                  "    background: #2a2f3a;",
+                  "    color: #cfd3da;",
+                  "    padding: 4px 10px;",
+                  "    border-radius: 20px;",
+                  "    font-size: 11px;",
+                  "    border: 1px solid #343a46;",
+                  "  }",
+                  "",
+                  "  .items-list {",
+                  "    padding: 10px 14px;",
+                  "  }",
+                  "",
+                  "  .activity-item {",
+                  "    display: flex;",
+                  "    align-items: center;",
+                  "    padding: 10px 8px;",
+                  "    border-radius: 8px;",
+                  "    transition: background 0.15s ease;",
+                  "  }",
+                  "",
+                  "  .activity-item:hover {",
+                  "    background: #1d212a;",
+                  "  }",
+                  "",
+                  "  .badge {",
+                  "    padding: 4px 10px;",
+                  "    border-radius: 6px;",
+                  "    font-size: 10px;",
+                  "    font-weight: 600;",
+                  "    text-transform: uppercase;",
+                  "    margin-right: 14px;",
+                  "    min-width: 72px;",
+                  "    text-align: center;",
+                  "    background: #2b2f38;",
+                  "    color: #cfd3da;",
+                  "    border: 1px solid #3a404c;",
+                  "  }",
+                  "",
+                  "  .activity-link {",
+                  "    color: #d7dbe2;",
+                  "    text-decoration: none;",
+                  "    font-size: 14px;",
+                  "    flex: 1;",
+                  "  }",
+                  "",
+                  "  .activity-link:hover {",
+                  "    color: #ffffff;",
+                  "  }",
+                  "",
+                  "  .no-sections {",
+                  "    text-align: center;",
+                  "    padding: 50px;",
+                  "    color: #7a808a;",
+                  "  }",
+                  "</style>",
+                  "",
+                  "<div class=\"header\">",
+                  "  <h1>{{courseTitle}}</h1>",
+                  "  <div class=\"subtitle\">{{sectionCount}} sections · {{totalItems}} activities</div>",
+                  "</div>",
+                  "",
+                  "{{#if sections}}",
+                  "  {{#each sections}}",
+                  "  <div class=\"section-card color-{{@index}}\">",
+                  "    <div class=\"section-header\">",
+                  "      <h3 class=\"section-title\">{{title}}</h3>",
+                  "      <span class=\"item-count\">{{itemCount}} items</span>",
+                  "    </div>",
+                  "    <div class=\"items-list\">",
+                  "      {{#each items}}",
+                  "      <div class=\"activity-item\">",
+                  "        <span class=\"badge\">{{modType}}</span>",
+                  "        <a href=\"{{url}}\" target=\"_blank\" class=\"activity-link\">{{title}}</a>",
+                  "      </div>",
+                  "      {{/each}}",
+                  "    </div>",
+                  "  </div>",
+                  "  {{/each}}",
+                  "{{else}}",
+                  "  <div class=\"no-sections\">No sections found in this course.</div>",
+                  "{{/if}}",
+                  "`;",
+                  "",
+                  "",
+                  "function constructVisualizerPayload() {",
+                  "  var totalItems = 0;",
+                  "  for (var i = 0; i < sectionsWithColors.length; i++) {",
+                  "    totalItems += sectionsWithColors[i].itemCount;",
+                  "  }",
+                  "  return {",
+                  "    courseTitle: courseTitle,",
+                  "    sections: sectionsWithColors,",
+                  "    sectionCount: sectionsWithColors.length,",
+                  "    totalItems: totalItems",
+                  "  };",
+                  "}",
+                  "",
+                  "pm.visualizer.set(template, constructVisualizerPayload());"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "User-Agent",
+                "value": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile"
+              },
+              {
+                "key": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/course/view.php?id={{courseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "course",
+                "view.php"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{courseId}}"
+                }
+              ]
+            },
+            "description": "Loads the course page with sections and activities. Output: HTML. Parsed like the app: sections (li.section), activities (li.activity) with modtype (assign, folder, resource, quiz, etc), title, url. Visualize tab shows a tree of sections and activity links."
+          },
+          "response": []
+        }
+      ],
+      "description": "Course resources tree (sections and activities). Set courseId."
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://lmsug24.iiitkottayam.ac.in"
+    },
+    {
+      "key": "logintoken",
+      "value": ""
+    },
+    {
+      "key": "sesskey",
+      "value": ""
+    },
+    {
+      "key": "courseId",
+      "value": ""
+    },
+    {
+      "key": "attendanceModuleId",
+      "value": ""
+    },
+    {
+      "key": "nowSec",
+      "value": "0"
+    },
+    {
+      "key": "pastSec",
+      "value": "0"
+    }
+  ]
+}
