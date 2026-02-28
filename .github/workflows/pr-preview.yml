@@ -80,6 +80,7 @@ jobs:
       - name: Comment on PR (manual trigger)
         if: github.event_name == 'workflow_dispatch'
         env:
+          GH_TOKEN: ${{ github.token }}
           UPDATE_LINK: ${{ steps.preview.outputs.link }}
           QR_LINK: ${{ steps.preview.outputs.qr }}
         run: |
