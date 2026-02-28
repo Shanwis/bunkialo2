@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { getContentUriAsync } from "expo-file-system/legacy";
 import { startActivityAsync } from "expo-intent-launcher";
 import { router, useLocalSearchParams } from "expo-router";
+import { isAvailableAsync, shareAsync } from "expo-sharing";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -45,6 +46,13 @@ const ANNOUNCEMENT_FORUM_MATCHERS = [
   "news forum",
   "notice board",
 ];
+
+const FLAG_GRANT_READ_URI_PERMISSION = 1;
+
+const normalizeMimeType = (contentType: string | null): string => {
+  const baseType = contentType?.split(";")[0]?.trim().toLowerCase();
+  return baseType || "*/*";
+};
 
 const shouldHideItem = (item: LmsResourceItemNode): boolean => {
   if (item.moduleType !== "forum") return false;
@@ -207,15 +215,24 @@ export default function CourseResourcesScreen() {
       }
 
       try {
+        const normalizedMimeType = normalizeMimeType(downloadResult.contentType);
         if (Platform.OS === "android") {
           const contentUri = await getContentUriAsync(downloadResult.uri);
           await startActivityAsync("android.intent.action.VIEW", {
             data: contentUri,
-            type: downloadResult.contentType ?? "*/*",
-            flags: 1,
+            type: normalizedMimeType,
+            flags: FLAG_GRANT_READ_URI_PERMISSION,
           });
         } else {
-          await Linking.openURL(downloadResult.uri);
+          const canShare = await isAvailableAsync();
+          if (canShare) {
+            await shareAsync(downloadResult.uri, {
+              dialogTitle: "Open downloaded file",
+              mimeType: normalizedMimeType,
+            });
+          } else {
+            await Linking.openURL(downloadResult.uri);
+          }
         }
         Toast.show("Downloaded successfully", {
           type: "success",
