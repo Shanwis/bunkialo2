@@ -86,5 +86,6 @@ jobs:
         run: |
           gh pr comment ${{ github.event.inputs.pr_number }} --body "**Preview (manual trigger)**
 
-          - Update: $UPDATE_LINK
-          - QR: $QR_LINK"
+          ![QR Code]($QR_LINK)
+
+          - [Update]($UPDATE_LINK)"
