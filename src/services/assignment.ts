@@ -382,6 +382,24 @@ export const fetchAssignmentDetails = async (
   const { courseId, courseName } = extractCourseCrumb(doc);
   const assignmentName = normalizeText(getText(querySelector(doc, "h1"))) || `Assignment ${assignmentId}`;
   const description = extractDescription(doc);
+  // Extract resource links inside assignment description
+  const resourceLinks = querySelectorAll(
+    doc,
+    ".activity-description a[href]"
+  );
+
+  const resources = resourceLinks
+  .map((link, index) => {
+    const href = getAttr(link, "href");
+    if (!href) return null;
+
+    return {
+      id: `resource-${index + 1}`,
+      name: normalizeText(getText(link)) || `File ${index + 1}`,
+      url: toAbsoluteLmsUrl(href),
+    };
+  })
+  .filter((item): item is { id: string; name: string; url: string } => Boolean(item));
   const dates = parseActivityDates(doc);
 
   const statusTableRoot =
@@ -405,6 +423,7 @@ export const fetchAssignmentDetails = async (
     allowSubmissionsFrom: dates["allow submissions from"] ?? null,
     descriptionHtml: description.html,
     descriptionText: description.text,
+    resources,
     submissionStatusText: statusRows["submission status"] ?? null,
     gradingStatusText: statusRows["grading status"] ?? null,
     timeRemainingText: statusRows["time remaining"] ?? null,

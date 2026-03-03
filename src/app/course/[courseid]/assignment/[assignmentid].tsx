@@ -23,6 +23,11 @@ import {
   View,
 } from "react-native";
 import { formatSyncTime } from "../../utils/course-utils";
+import { downloadLmsResourceWithSession } from "@/services/lms-download";
+import { getContentUriAsync } from "expo-file-system/legacy";
+import { startActivityAsync } from "expo-intent-launcher";
+import { isAvailableAsync, shareAsync } from "expo-sharing";
+import { Platform } from "react-native";
 
 const formatDateTime = (timestamp: number | null): string => {
   if (!timestamp) return "Not available";
@@ -111,6 +116,10 @@ export default function AssignmentDetailScreen() {
   const [onlineText, setOnlineText] = useState("");
   const [files, setFiles] = useState<AssignmentUploadLocalFile[]>([]);
   const [hasSeededOnlineText, setHasSeededOnlineText] = useState(false);
+
+  const [downloadingUrlSet, setDownloadingUrlSet] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
     if (!assignmentId || !hasHydrated) return;
@@ -268,6 +277,62 @@ export default function AssignmentDetailScreen() {
 
     Toast.show(result.message, { type: "error" });
   };
+    const FLAG_GRANT_READ_URI_PERMISSION = 1;
+
+const normalizeMimeType = (contentType: string | null): string => {
+  const baseType = contentType?.split(";")[0]?.trim().toLowerCase();
+  return baseType || "*/*";
+};
+
+const openExternal = async (url: string, preferredName: string) => {
+  if (downloadingUrlSet[url]) return;
+
+  setDownloadingUrlSet((prev) => ({ ...prev, [url]: true }));
+
+  const result = await downloadLmsResourceWithSession(url, preferredName);
+
+  if (!result.success) {
+    Toast.show(result.message || "Download failed", { type: "error" });
+    setDownloadingUrlSet((prev) => {
+      const next = { ...prev };
+      delete next[url];
+      return next;
+    });
+    return;
+  }
+
+  try {
+    const mime = normalizeMimeType(result.contentType);
+
+    if (Platform.OS === "android") {
+      const contentUri = await getContentUriAsync(result.uri);
+      await startActivityAsync("android.intent.action.VIEW", {
+        data: contentUri,
+        type: mime,
+        flags: FLAG_GRANT_READ_URI_PERMISSION,
+      });
+    } else {
+      const canShare = await isAvailableAsync();
+      if (canShare) {
+        await shareAsync(result.uri, { mimeType: mime });
+      } else {
+        await Linking.openURL(result.uri);
+      }
+    }
+
+    Toast.show("Downloaded successfully", { type: "success" });
+  } catch {
+    Toast.show("Downloaded but could not open file", {
+      type: "warning",
+    });
+  } finally {
+    setDownloadingUrlSet((prev) => {
+      const next = { ...prev };
+      delete next[url];
+      return next;
+    });
+  }
+};
 
   return (
     <Container className="relative">
@@ -442,6 +507,36 @@ export default function AssignmentDetailScreen() {
               <Text className="mt-2 text-[13px] leading-5" style={{ color: theme.textSecondary }}>
                 {details.descriptionText || "No assignment description provided."}
               </Text>
+              {details.resources && details.resources.length > 0 && (
+              <View className="mt-3 gap-2">
+                <Text
+                  className="text-[13px] font-semibold"
+                  style={{ color: theme.text }}
+                >
+                  Resources
+                </Text>
+
+                {details.resources.map((resource) => (
+                  <Pressable
+                    key={resource.id}
+                    className="rounded-xl border px-3 py-2"
+                    style={{
+                      borderColor: theme.border,
+                      backgroundColor: theme.background,
+                    }}
+                    onPress={() =>void openExternal(resource.url, breadcrumbAssignment)}
+                  >
+                    <Text
+                      className="text-[13px]"
+                      style={{ color: Colors.accent }}
+                      numberOfLines={2}
+                    >
+                      {resource.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             </View>
 
             <View className="rounded-2xl border p-4" style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}>
