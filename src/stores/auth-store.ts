@@ -17,8 +17,8 @@ import { useLmsResourcesStore } from "@/stores/lms-resources-store";
 import { useAssignmentStore } from "@/stores/assignment-store";
 import { useTimetableStore } from "@/stores/timetable-store";
 import type { AuthState } from "@/types";
+import { scheduleIdleTask } from "@/utils/scheduling";
 import axios from "axios";
-import { InteractionManager } from "react-native";
 
 const isNetworkError = (error: unknown): boolean => {
   if (axios.isAxiosError(error)) {
@@ -164,7 +164,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
     });
 
     // Background session validation / re-auth.
-    InteractionManager.runAfterInteractions(() => {
+    scheduleIdleTask(() => {
       void (async () => {
         try {
           const success = await authService.tryAutoLogin();
@@ -199,7 +199,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
           });
         }
       })();
-    });
+    }, { timeoutMs: 350 });
   },
 
   setError: (error) => set({ error }),

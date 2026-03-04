@@ -2,11 +2,12 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { useGestureUiStore } from "@/stores/gesture-ui-store";
+import { scheduleIdleTask } from "@/utils/scheduling";
 import { Ionicons } from "@expo/vector-icons";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import { withLayoutContext } from "expo-router";
 import { startTransition, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, InteractionManager, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { Navigator } = createMaterialTopTabNavigator();
@@ -26,77 +27,111 @@ export default function TabLayout() {
   const theme = isDark ? Colors.dark : Colors.light;
   const hasDashboardHydrated = useDashboardStore((state) => state.hasHydrated);
   const isDashboardLoading = useDashboardStore((state) => state.isLoading);
+  const lastDashboardSyncTime = useDashboardStore((state) => state.lastSyncTime);
+  const dashboardError = useDashboardStore((state) => state.error);
+  const upcomingEventsCount = useDashboardStore(
+    (state) => state.upcomingEvents.length,
+  );
+  const overdueEventsCount = useDashboardStore(
+    (state) => state.overdueEvents.length,
+  );
   const isHorizontalContentGestureActive = useGestureUiStore(
     (state) => state.isHorizontalContentGestureActive,
   );
   const [lazyEnabled, setLazyEnabled] = useState(true);
   const [lazyPreloadDistance, setLazyPreloadDistance] = useState(0);
-  const hasScheduledTabWarmup = useRef(false);
+  const hasStartedTabWarmup = useRef(false);
+  const primaryIdleCancelRef = useRef<(() => void) | null>(null);
+  const secondaryIdleCancelRef = useRef<(() => void) | null>(null);
+  const fullMountIdleCancelRef = useRef<(() => void) | null>(null);
+  const primaryTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const secondaryTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const fullMountTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const insets = useSafeAreaInsets();
   const tabLabelStyle = { fontSize: 12, lineHeight: 16 };
   const iconSize = 22;
   const tabBarContentHeight = iconSize + tabLabelStyle.lineHeight + 8;
   const tabBarHeight = tabBarContentHeight + insets.bottom;
 
+  const cancelWarmupTimersAndTasks = () => {
+    primaryIdleCancelRef.current?.();
+    secondaryIdleCancelRef.current?.();
+    fullMountIdleCancelRef.current?.();
+    primaryIdleCancelRef.current = null;
+    secondaryIdleCancelRef.current = null;
+    fullMountIdleCancelRef.current = null;
+
+    if (primaryTimeoutIdRef.current) {
+      clearTimeout(primaryTimeoutIdRef.current);
+      primaryTimeoutIdRef.current = null;
+    }
+    if (secondaryTimeoutIdRef.current) {
+      clearTimeout(secondaryTimeoutIdRef.current);
+      secondaryTimeoutIdRef.current = null;
+    }
+    if (fullMountTimeoutIdRef.current) {
+      clearTimeout(fullMountTimeoutIdRef.current);
+      fullMountTimeoutIdRef.current = null;
+    }
+  };
+
   useEffect(() => {
-    if (!hasDashboardHydrated || isDashboardLoading) return;
-    if (hasScheduledTabWarmup.current) return;
-    hasScheduledTabWarmup.current = true;
+    return () => cancelWarmupTimersAndTasks();
+  }, []);
 
-    let primaryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    let secondaryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    let fullMountTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    let secondaryTask: ReturnType<
-      typeof InteractionManager.runAfterInteractions
-    > | null = null;
-    let fullMountTask: ReturnType<
-      typeof InteractionManager.runAfterInteractions
-    > | null = null;
+  useEffect(() => {
+    const hasDashboardContent = upcomingEventsCount + overdueEventsCount > 0;
+    const hasDashboardSettled =
+      hasDashboardHydrated &&
+      !isDashboardLoading &&
+      (lastDashboardSyncTime !== null || hasDashboardContent || !!dashboardError);
 
-    const primaryTask = InteractionManager.runAfterInteractions(() => {
-      primaryTimeoutId = setTimeout(() => {
+    if (!hasDashboardSettled) return;
+    if (hasStartedTabWarmup.current) return;
+    hasStartedTabWarmup.current = true;
+
+    primaryIdleCancelRef.current = scheduleIdleTask(() => {
+      primaryTimeoutIdRef.current = setTimeout(() => {
         setLazyPreloadDistance(1);
         void Promise.allSettled(
           PRIMARY_TAB_WARMUP_PRELOADERS.map((preloadRoute) => preloadRoute()),
         );
 
-        secondaryTask = InteractionManager.runAfterInteractions(() => {
-          secondaryTimeoutId = setTimeout(() => {
+        secondaryIdleCancelRef.current = scheduleIdleTask(() => {
+          secondaryTimeoutIdRef.current = setTimeout(() => {
             setLazyPreloadDistance(2);
             void Promise.allSettled(
               SECONDARY_TAB_WARMUP_PRELOADERS.map((preloadRoute) =>
                 preloadRoute(),
               ),
             );
-          }, 300);
-        });
+          }, 200);
+        }, { timeoutMs: 320 });
 
-        fullMountTask = InteractionManager.runAfterInteractions(() => {
-          fullMountTimeoutId = setTimeout(() => {
+        fullMountIdleCancelRef.current = scheduleIdleTask(() => {
+          fullMountTimeoutIdRef.current = setTimeout(() => {
             startTransition(() => {
               setLazyPreloadDistance(4);
               setLazyEnabled(false);
             });
-          }, 900);
-        });
-      }, 450);
-    });
-
-    return () => {
-      primaryTask.cancel();
-      secondaryTask?.cancel();
-      fullMountTask?.cancel();
-      if (primaryTimeoutId) {
-        clearTimeout(primaryTimeoutId);
-      }
-      if (secondaryTimeoutId) {
-        clearTimeout(secondaryTimeoutId);
-      }
-      if (fullMountTimeoutId) {
-        clearTimeout(fullMountTimeoutId);
-      }
-    };
-  }, [hasDashboardHydrated, isDashboardLoading]);
+          }, 650);
+        }, { timeoutMs: 520 });
+      }, 260);
+    }, { timeoutMs: 300 });
+  }, [
+    dashboardError,
+    hasDashboardHydrated,
+    isDashboardLoading,
+    lastDashboardSyncTime,
+    overdueEventsCount,
+    upcomingEventsCount,
+  ]);
 
   return (
     <MaterialBottomTabs
