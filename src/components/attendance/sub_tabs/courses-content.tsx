@@ -12,11 +12,22 @@ import {
   selectAllDutyLeaves,
   useBunkStore,
 } from "@/stores/bunk-store";
-import type { AttendanceRecord, CourseAttendance, CourseBunkData } from "@/types";
+import type {
+  AttendanceRecord,
+  CourseAttendance,
+  CourseBunkData,
+} from "@/types";
 import { getRecordKeyVariants } from "@/utils/attendance-helpers";
 import { useCallback, useMemo } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  Text,
+  View,
+} from "react-native";
 import { AddBunkModal } from "../add-bunk-modal";
+import { ChangesModal } from "../changes-modal";
 import { CourseEditModal } from "../course-edit-modal";
 import { CreateCourseModal } from "../create-course-modal";
 import { DLInputModal } from "../dl-input-modal";
@@ -24,7 +35,6 @@ import { DutyLeaveModal } from "../duty-leave-modal";
 import { PresenceInputModal } from "../presence-input-modal";
 import { UnifiedCourseCard } from "../unified-course-card";
 import { UnknownStatusModal } from "../unknown-status-modal";
-import { ChangesModal } from "../changes-modal";
 
 const parseDateString = (
   dateStr: string,
@@ -145,7 +155,7 @@ export const CoursesContent = () => {
     handleResolveConflict,
     handleResolveAllPreferred,
     conflicts,
-    handleRevertAutoConflict,
+    handleRevertConflict,
   } = useCourseActions();
 
   const visibleAttendanceCourses = useMemo(
@@ -190,9 +200,15 @@ export const CoursesContent = () => {
       }
 
       const aName =
-        a.bunkData?.config?.alias ?? a.course?.courseName ?? a.bunkData?.courseId ?? "";
+        a.bunkData?.config?.alias ??
+        a.course?.courseName ??
+        a.bunkData?.courseId ??
+        "";
       const bName =
-        b.bunkData?.config?.alias ?? b.course?.courseName ?? b.bunkData?.courseId ?? "";
+        b.bunkData?.config?.alias ??
+        b.course?.courseName ??
+        b.bunkData?.courseId ??
+        "";
 
       return aName.localeCompare(bName);
     });
@@ -359,7 +375,6 @@ export const CoursesContent = () => {
 
       <ChangesModal visible={isChangesVisible} onClose={closeModal} />
 
-
       <DLInputModal
         visible={isDLInputBunkVisible}
         onClose={closeModal}
@@ -412,7 +427,7 @@ export const CoursesContent = () => {
         conflicts={conflicts}
         onResolve={handleResolveConflict}
         onResolveAllPreferred={handleResolveAllPreferred}
-        onRevertAutoConflict={handleRevertAutoConflict}
+        onRevertConflict={handleRevertConflict}
         onClose={closeModal}
       />
 

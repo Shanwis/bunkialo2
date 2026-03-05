@@ -1,9 +1,8 @@
 import type {
-  AutoAutoSlotConflict,
   DayOfWeek,
   OutlierSlotConflict,
-  SlotOccurrenceStats,
   SlotConflict,
+  SlotOccurrenceStats,
   TimeOverlapSlotConflict,
   TimetableSlot,
   TimetableState,
@@ -21,20 +20,14 @@ interface TimetableActions {
   clearTimetable: () => void;
   resolveConflict: (
     conflictIndex: number,
-    keep:
-      | "manual"
-      | "auto"
-      | "preferred"
-      | "alternative"
-      | "keep-outlier"
-      | "ignore-outlier",
+    keep: "preferred" | "alternative" | "keep-outlier" | "ignore-outlier",
   ) => void;
-  resolveAllAutoConflicts: (keep: "preferred" | "alternative") => void;
-  revertAutoConflictResolution: (conflictId: string) => void;
+  resolveAllPreferred: () => void;
+  revertConflictResolution: (conflictId: string) => void;
   clearConflicts: () => void;
 }
 
-const TIMETABLE_PERSIST_VERSION = 6;
+const TIMETABLE_PERSIST_VERSION = 7;
 const RECOMPUTE_MAX_RETRIES = 20;
 const RECOMPUTE_RETRY_DELAY_MS = 200;
 const AUTO_SLOT_START_CONFLICT_WINDOW_MINUTES = 120;
@@ -57,7 +50,6 @@ const MONTH_MAP: Record<string, number> = {
 const generateId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-// check if two time ranges overlap
 const timesOverlap = (
   start1: string,
   end1: string,
@@ -126,24 +118,8 @@ const autoSlotStoreKey = (
   startTime: string,
 ) => `${courseId}-${dayOfWeek}-${startTime}`;
 
-const autoCandidateSlotKey = (
-  dayOfWeek: DayOfWeek,
-  startTime: string,
-  endTime: string,
-) => `${dayOfWeek}-${startTime}-${endTime}`;
-
 const slotResolutionKey = (slot: TimetableSlot) =>
   `${slot.courseId}-${slot.dayOfWeek}-${slot.startTime}-${slot.endTime}-${slot.sessionType}-${slot.isManual ? "manual" : "auto"}`;
-
-const buildAutoConflictId = (
-  courseId: string,
-  dayOfWeek: DayOfWeek,
-  slotKeyA: string,
-  slotKeyB: string,
-) => {
-  const ordered = [slotKeyA, slotKeyB].sort();
-  return `${courseId}-${dayOfWeek}-${ordered[0]}__${ordered[1]}`;
-};
 
 const buildPairConflictId = (slotA: TimetableSlot, slotB: TimetableSlot) => {
   const ordered = [slotResolutionKey(slotA), slotResolutionKey(slotB)].sort();
@@ -153,19 +129,13 @@ const buildPairConflictId = (slotA: TimetableSlot, slotB: TimetableSlot) => {
 const buildOutlierConflictId = (courseId: string, slotKey: string) =>
   `outlier-${courseId}-${slotKey}`;
 
+// rank purely by occurrence frequency
 const rankSlotForConflict = (
-  slot: TimetableSlot,
   stats?: SlotOccurrenceStats,
 ): number => {
-  const manualBoost = slot.isManual ? 1.0 : 0;
-  const confidence = stats?.score ?? 0;
-  const totalWeeks = stats
-    ? Math.max(stats.totalWeekSpanCount ?? stats.dayActiveWeekCount, 1)
-    : 1;
-  const consistency = stats
-    ? stats.occurrenceCount / totalWeeks
-    : 0;
-  return manualBoost + confidence + consistency * 0.2;
+  if (!stats) return 0;
+  const totalWeeks = Math.max(stats.totalWeekSpanCount ?? stats.dayActiveWeekCount, 1);
+  return stats.occurrenceCount / totalWeeks;
 };
 
 const isOutlierCandidate = (
@@ -201,7 +171,6 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
     (set, get) => ({
       slots: [],
       conflicts: [],
-      autoConflictResolutions: {},
       timeOverlapResolutions: {},
       outlierResolutions: {},
       lastGeneratedAt: null,
@@ -212,17 +181,12 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
 
         const attendanceCourses = useAttendanceStore.getState().courses;
         const { courses: bunkCourses, hiddenCourses } = useBunkStore.getState();
-        const {
-          autoConflictResolutions,
-          timeOverlapResolutions,
-          outlierResolutions,
-        } = get();
+        const { timeOverlapResolutions, outlierResolutions } = get();
         const globalWeekSpanCount = getGlobalWeekSpanCount(attendanceCourses);
 
         // step 1: generate auto slots from LMS attendance data
         const autoSlotMap = new Map<string, TimetableSlot>();
         const autoSlotStatsMap = new Map<string, SlotOccurrenceStats>();
-        const autoAutoConflicts: AutoAutoSlotConflict[] = [];
         const outlierConflicts: OutlierSlotConflict[] = [];
 
         for (const course of attendanceCourses) {
@@ -263,7 +227,7 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
 
           const chosenSlotKeys = new Set(selectedByRuleKeys);
 
-          for (const [dayOfWeek, dayCandidates] of candidatesByDay.entries()) {
+          for (const [, dayCandidates] of candidatesByDay.entries()) {
             const selectedCandidates = dayCandidates.filter((c) =>
               selectedByRuleKeys.has(c.slotKey),
             );
@@ -272,22 +236,23 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
             );
 
             for (const alternative of alternativeCandidates) {
-              let preferred = selectedCandidates[0];
+              let nearest = selectedCandidates[0];
               let minDiff = Number.POSITIVE_INFINITY;
 
               for (const selected of selectedCandidates) {
                 const diff = Math.abs(
                   timeToMinutes(selected.startTime) -
-                    timeToMinutes(alternative.startTime),
+                  timeToMinutes(alternative.startTime),
                 );
                 if (diff < minDiff) {
                   minDiff = diff;
-                  preferred = selected;
+                  nearest = selected;
                 }
               }
 
+              // too far from any selected slot — check if it's an outlier
               if (
-                !preferred ||
+                !nearest ||
                 minDiff > AUTO_SLOT_START_CONFLICT_WINDOW_MINUTES
               ) {
                 const outlierConflictId = buildOutlierConflictId(
@@ -323,7 +288,7 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
                       isCustomCourse: false,
                     },
                     stats: outlierStats,
-                    resolvedChoice: resolvedOutlier ?? null,
+                    resolvedChoice: resolvedOutlier ?? "ignore",
                   });
                   if (resolvedOutlier === "keep") {
                     chosenSlotKeys.add(alternative.slotKey);
@@ -333,12 +298,12 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
                 }
                 continue;
               }
-              // Same-course day alternatives are only ambiguous if they overlap.
-              // Non-overlapping slots (including back-to-back) can both exist.
+
+              // non-overlapping slots can coexist
               if (
                 !timesOverlap(
-                  preferred.startTime,
-                  preferred.endTime,
+                  nearest.startTime,
+                  nearest.endTime,
                   alternative.startTime,
                   alternative.endTime,
                 )
@@ -347,67 +312,12 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
                 continue;
               }
 
-              const conflictId = buildAutoConflictId(
-                course.courseId,
-                dayOfWeek,
-                preferred.slotKey,
-                alternative.slotKey,
-              );
-              const resolvedSlotKey =
-                autoConflictResolutions[conflictId] ?? preferred.slotKey;
-
-              if (resolvedSlotKey === alternative.slotKey) {
-                chosenSlotKeys.delete(preferred.slotKey);
+              // overlapping same-course variants: silently pick highest occurrence
+              if (alternative.occurrenceCount > nearest.occurrenceCount) {
+                chosenSlotKeys.delete(nearest.slotKey);
                 chosenSlotKeys.add(alternative.slotKey);
-              } else if (resolvedSlotKey === preferred.slotKey) {
-                chosenSlotKeys.add(preferred.slotKey);
-                chosenSlotKeys.delete(alternative.slotKey);
               }
-
-              autoAutoConflicts.push({
-                type: "auto-auto",
-                conflictId,
-                preferredSlot: {
-                  id: generateId(),
-                  courseId: course.courseId,
-                  courseName: displayName,
-                  dayOfWeek: preferred.dayOfWeek,
-                  startTime: preferred.startTime,
-                  endTime: preferred.endTime,
-                  sessionType: preferred.sessionType,
-                  isManual: false,
-                  isCustomCourse: false,
-                },
-                alternativeSlot: {
-                  id: generateId(),
-                  courseId: course.courseId,
-                  courseName: displayName,
-                  dayOfWeek: alternative.dayOfWeek,
-                  startTime: alternative.startTime,
-                  endTime: alternative.endTime,
-                  sessionType: alternative.sessionType,
-                  isManual: false,
-                  isCustomCourse: false,
-                },
-                preferredStats: {
-                  occurrenceCount: preferred.occurrenceCount,
-                  dayActiveWeekCount: preferred.dayActiveWeekCount,
-                  totalWeekSpanCount: preferred.totalWeekSpanCount,
-                  dayObservationCount: preferred.dayObservationCount,
-                  score: preferred.score,
-                },
-                alternativeStats: {
-                  occurrenceCount: alternative.occurrenceCount,
-                  dayActiveWeekCount: alternative.dayActiveWeekCount,
-                  totalWeekSpanCount: alternative.totalWeekSpanCount,
-                  dayObservationCount: alternative.dayObservationCount,
-                  score: alternative.score,
-                },
-                resolvedChoice:
-                  resolvedSlotKey === alternative.slotKey
-                    ? "alternative"
-                    : "preferred",
-              });
+              // else: keep the selected one (already in chosenSlotKeys)
             }
           }
 
@@ -469,13 +379,11 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
         const finalSlotMap = new Map<string, TimetableSlot>();
         const autoSlots = Array.from(autoSlotMap.values());
 
-        // add auto slots first
         for (const slot of autoSlots) {
           const key = `${slot.dayOfWeek}-${slot.startTime}-${slot.courseId}`;
           finalSlotMap.set(key, slot);
         }
 
-        // add manual slots (override if same key)
         for (const slot of manualSlots) {
           const key = `${slot.dayOfWeek}-${slot.startTime}-${slot.courseId}`;
           finalSlotMap.set(key, slot);
@@ -496,7 +404,7 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
           );
         };
 
-        // step 4: detect same-time overlaps across different courses
+        // step 4: detect cross-course time overlaps
         const timeOverlapConflicts: TimeOverlapSlotConflict[] = [];
         const removedSlotKeys = new Set<string>();
 
@@ -520,22 +428,16 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
 
             const statsA = getSlotStats(slotA);
             const statsB = getSlotStats(slotB);
-            const rankA = rankSlotForConflict(slotA, statsA);
-            const rankB = rankSlotForConflict(slotB, statsB);
+            const rankA = rankSlotForConflict(statsA);
+            const rankB = rankSlotForConflict(statsB);
 
+            // higher occurrence frequency = preferred
             let preferredSlot = slotA;
             let alternativeSlot = slotB;
             let preferredStats = statsA;
             let alternativeStats = statsB;
 
-            if (
-              rankB > rankA ||
-              (rankA === rankB &&
-                slotB.startTime.localeCompare(slotA.startTime) < 0) ||
-              (rankA === rankB &&
-                slotA.startTime === slotB.startTime &&
-                slotB.courseName.localeCompare(slotA.courseName) < 0)
-            ) {
+            if (rankB > rankA) {
               preferredSlot = slotB;
               alternativeSlot = slotA;
               preferredStats = statsB;
@@ -575,7 +477,6 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
         );
         const conflicts: SlotConflict[] = [
           ...timeOverlapConflicts,
-          ...autoAutoConflicts,
           ...outlierConflicts,
         ];
 
@@ -588,154 +489,71 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
       },
 
       resolveConflict: (conflictIndex, keep) => {
-        const {
-          conflicts,
-          slots,
-          autoConflictResolutions,
-          timeOverlapResolutions,
-          outlierResolutions,
-        } = get();
+        const { conflicts, timeOverlapResolutions, outlierResolutions } = get();
         if (conflictIndex < 0 || conflictIndex >= conflicts.length) return;
 
         const conflict = conflicts[conflictIndex];
-        if (conflict.type === "manual-auto") {
-          const slotToRemove =
-            keep === "manual" ? conflict.autoSlot : conflict.manualSlot;
-
-          // remove the unwanted slot
-          const updatedSlots = slots.filter((s) => s.id !== slotToRemove.id);
-
-          // remove this conflict from the list
-          const updatedConflicts = conflicts.filter(
-            (_, idx) => idx !== conflictIndex,
-          );
-
-          set({ slots: updatedSlots, conflicts: updatedConflicts });
-          return;
-        }
-
-        if (conflict.type === "auto-auto") {
-          const chosenSlotKey =
-            keep === "alternative"
-              ? autoCandidateSlotKey(
-                  conflict.alternativeSlot.dayOfWeek,
-                  conflict.alternativeSlot.startTime,
-                  conflict.alternativeSlot.endTime,
-                )
-              : autoCandidateSlotKey(
-                  conflict.preferredSlot.dayOfWeek,
-                  conflict.preferredSlot.startTime,
-                  conflict.preferredSlot.endTime,
-                );
-          const updatedResolutions = {
-            ...autoConflictResolutions,
-            [conflict.conflictId]: chosenSlotKey,
-          };
-          set({ autoConflictResolutions: updatedResolutions });
-          get().generateTimetable();
-          return;
-        }
 
         if (conflict.type === "time-overlap") {
           const chosenSlotKey =
             keep === "alternative"
               ? slotResolutionKey(conflict.alternativeSlot)
               : slotResolutionKey(conflict.preferredSlot);
-          const updatedResolutions = {
-            ...timeOverlapResolutions,
-            [conflict.conflictId]: chosenSlotKey,
-          };
-          set({ timeOverlapResolutions: updatedResolutions });
+          set({
+            timeOverlapResolutions: {
+              ...timeOverlapResolutions,
+              [conflict.conflictId]: chosenSlotKey,
+            },
+          });
           get().generateTimetable();
           return;
         }
 
         if (conflict.type === "outlier-review") {
-          const updatedOutlierResolutions = { ...outlierResolutions };
-          updatedOutlierResolutions[conflict.conflictId] =
-            keep === "keep-outlier" ? "keep" : "ignore";
-          set({ outlierResolutions: updatedOutlierResolutions });
+          set({
+            outlierResolutions: {
+              ...outlierResolutions,
+              [conflict.conflictId]: keep === "keep-outlier" ? "keep" : "ignore",
+            },
+          });
         }
         get().generateTimetable();
       },
 
-      resolveAllAutoConflicts: (keep) => {
-        const {
-          conflicts,
-          autoConflictResolutions,
-          timeOverlapResolutions,
-          outlierResolutions,
-        } = get();
-        const autoConflicts = conflicts.filter(
-          (conflict): conflict is AutoAutoSlotConflict =>
-            conflict.type === "auto-auto",
-        );
+      resolveAllPreferred: () => {
+        const { conflicts, timeOverlapResolutions, outlierResolutions } = get();
         const timeConflicts = conflicts.filter(
-          (conflict): conflict is TimeOverlapSlotConflict =>
-            conflict.type === "time-overlap",
+          (c): c is TimeOverlapSlotConflict => c.type === "time-overlap",
         );
         const outlierConflicts = conflicts.filter(
-          (conflict): conflict is OutlierSlotConflict =>
-            conflict.type === "outlier-review",
+          (c): c is OutlierSlotConflict => c.type === "outlier-review",
         );
-        if (
-          autoConflicts.length === 0 &&
-          timeConflicts.length === 0 &&
-          outlierConflicts.length === 0
-        ) {
-          return;
-        }
-
-        const updatedAutoResolutions = { ...autoConflictResolutions };
-        for (const conflict of autoConflicts) {
-          const chosenSlotKey =
-            keep === "alternative"
-              ? autoCandidateSlotKey(
-                  conflict.alternativeSlot.dayOfWeek,
-                  conflict.alternativeSlot.startTime,
-                  conflict.alternativeSlot.endTime,
-                )
-              : autoCandidateSlotKey(
-                  conflict.preferredSlot.dayOfWeek,
-                  conflict.preferredSlot.startTime,
-                  conflict.preferredSlot.endTime,
-                );
-          updatedAutoResolutions[conflict.conflictId] = chosenSlotKey;
-        }
+        if (timeConflicts.length === 0 && outlierConflicts.length === 0) return;
 
         const updatedTimeResolutions = { ...timeOverlapResolutions };
         for (const conflict of timeConflicts) {
-          const chosenSlotKey =
-            keep === "alternative"
-              ? slotResolutionKey(conflict.alternativeSlot)
-              : slotResolutionKey(conflict.preferredSlot);
-          updatedTimeResolutions[conflict.conflictId] = chosenSlotKey;
+          updatedTimeResolutions[conflict.conflictId] =
+            slotResolutionKey(conflict.preferredSlot);
         }
 
         const updatedOutlierResolutions = { ...outlierResolutions };
         for (const conflict of outlierConflicts) {
-          updatedOutlierResolutions[conflict.conflictId] =
-            keep === "preferred" ? "ignore" : "keep";
+          updatedOutlierResolutions[conflict.conflictId] = "ignore";
         }
 
         set({
-          autoConflictResolutions: updatedAutoResolutions,
           timeOverlapResolutions: updatedTimeResolutions,
           outlierResolutions: updatedOutlierResolutions,
         });
         get().generateTimetable();
       },
 
-      revertAutoConflictResolution: (conflictId) => {
-        const { autoConflictResolutions, timeOverlapResolutions, outlierResolutions } = get();
-        const updatedResolutions = { ...autoConflictResolutions };
+      revertConflictResolution: (conflictId) => {
+        const { timeOverlapResolutions, outlierResolutions } = get();
         const updatedTimeResolutions = { ...timeOverlapResolutions };
         const updatedOutlierResolutions = { ...outlierResolutions };
         let hasChange = false;
-        if (conflictId in updatedResolutions) {
-          delete updatedResolutions[conflictId];
-          hasChange = true;
-        }
+
         if (conflictId in updatedTimeResolutions) {
           delete updatedTimeResolutions[conflictId];
           hasChange = true;
@@ -747,7 +565,6 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
         if (!hasChange) return;
 
         set({
-          autoConflictResolutions: updatedResolutions,
           timeOverlapResolutions: updatedTimeResolutions,
           outlierResolutions: updatedOutlierResolutions,
         });
@@ -762,7 +579,6 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
         set({
           slots: [],
           conflicts: [],
-          autoConflictResolutions: {},
           timeOverlapResolutions: {},
           outlierResolutions: {},
           lastGeneratedAt: null,
@@ -777,13 +593,11 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
       migrate: (persistedState, version) => {
         const state = (persistedState ?? {}) as Partial<TimetableState>;
 
-        // reset old persisted timetable slots so they get regenerated by current inference logic
         if (version < TIMETABLE_PERSIST_VERSION) {
           return {
             ...state,
             slots: [],
             conflicts: [],
-            autoConflictResolutions: {},
             timeOverlapResolutions: {},
             outlierResolutions: {},
           };
@@ -794,7 +608,6 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
       partialize: (state) => ({
         slots: state.slots,
         conflicts: state.conflicts,
-        autoConflictResolutions: state.autoConflictResolutions,
         timeOverlapResolutions: state.timeOverlapResolutions,
         outlierResolutions: state.outlierResolutions,
         lastGeneratedAt: state.lastGeneratedAt,
@@ -805,7 +618,6 @@ export const useTimetableStore = create<TimetableState & TimetableActions>()(
         const hadPersistedTimetable =
           state.slots.length > 0 ||
           state.conflicts.length > 0 ||
-          Object.keys(state.autoConflictResolutions).length > 0 ||
           Object.keys(state.timeOverlapResolutions ?? {}).length > 0 ||
           Object.keys(state.outlierResolutions ?? {}).length > 0 ||
           state.lastGeneratedAt !== null;
@@ -826,7 +638,6 @@ export const getCurrentAndNextClass = (
   const currentDay = now.getDay() as DayOfWeek;
   const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
-  // today's slots
   const todaySlots = slots.filter((s) => s.dayOfWeek === currentDay);
   todaySlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
@@ -841,7 +652,6 @@ export const getCurrentAndNextClass = (
     }
   }
 
-  // if no next class today, find first class of next days
   if (!nextClass) {
     for (let i = 1; i <= 7; i++) {
       const checkDay = ((currentDay + i) % 7) as DayOfWeek;
@@ -857,7 +667,6 @@ export const getCurrentAndNextClass = (
   return { currentClass, nextClass };
 };
 
-// format time for display (24h to 12h)
 export const formatTimeDisplay = (time: string): string => {
   const [hours, minutes] = time.split(":").map(Number);
   const period = hours >= 12 ? "PM" : "AM";
@@ -865,23 +674,21 @@ export const formatTimeDisplay = (time: string): string => {
   return `${displayHours}:${minutes.toString().padStart(2, "0")} ${period}`;
 };
 
-// day name helper
 export const getDayName = (day: DayOfWeek, short = true): string => {
   const names = short
     ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     : [
-        "Sunday",
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-      ];
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
   return names[day];
 };
 
-// get nearby slots for carousel (all current day's classes + next day's classes if needed)
 export const getNearbySlots = (
   slots: TimetableSlot[],
   now: Date = new Date(),
@@ -891,11 +698,9 @@ export const getNearbySlots = (
   const currentDay = now.getDay() as DayOfWeek;
   const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
-  // get today's slots sorted by time
   const todaySlots = slots.filter((s) => s.dayOfWeek === currentDay);
   todaySlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-  // check if there are any classes today that haven't ended yet
   const hasRemainingToday = todaySlots.some(
     (slot) => slot.endTime > currentTime,
   );
@@ -903,10 +708,8 @@ export const getNearbySlots = (
   let result: TimetableSlot[] = [];
 
   if (hasRemainingToday) {
-    // show all today's classes
     result = todaySlots;
   } else {
-    // no more classes today, show next day's classes
     for (let i = 1; i <= 7; i++) {
       const nextDay = ((currentDay + i) % 7) as DayOfWeek;
       const nextDaySlots = slots.filter((s) => s.dayOfWeek === nextDay);

@@ -19,8 +19,8 @@ export const useCourseActions = () => {
   const {
     generateTimetable,
     resolveConflict,
-    resolveAllAutoConflicts,
-    revertAutoConflictResolution,
+    resolveAllPreferred,
+    revertConflictResolution,
     conflicts,
   } = useTimetableStore();
   const { openModal, closeModal, toggleEditMode } = useAttendanceUIStore();
@@ -112,13 +112,7 @@ export const useCourseActions = () => {
   const handleResolveConflict = useCallback(
     (
       conflictIndex: number,
-      keep:
-        | "manual"
-        | "auto"
-        | "preferred"
-        | "alternative"
-        | "keep-outlier"
-        | "ignore-outlier",
+      keep: "preferred" | "alternative" | "keep-outlier" | "ignore-outlier",
     ) => {
       resolveConflict(conflictIndex, keep);
     },
@@ -126,14 +120,14 @@ export const useCourseActions = () => {
   );
 
   const handleResolveAllPreferred = useCallback(() => {
-    resolveAllAutoConflicts("preferred");
-  }, [resolveAllAutoConflicts]);
+    resolveAllPreferred();
+  }, [resolveAllPreferred]);
 
-  const handleRevertAutoConflict = useCallback(
+  const handleRevertConflict = useCallback(
     (conflictId: string) => {
-      revertAutoConflictResolution(conflictId);
+      revertConflictResolution(conflictId);
     },
-    [revertAutoConflictResolution],
+    [revertConflictResolution],
   );
 
   const handleOpenCreateCourse = useCallback(() => {
@@ -155,7 +149,7 @@ export const useCourseActions = () => {
     handleRestoreCourse,
     handleResolveConflict,
     handleResolveAllPreferred,
-    handleRevertAutoConflict,
+    handleRevertConflict,
     handleOpenCreateCourse,
     handleToggleEditMode,
     conflicts,

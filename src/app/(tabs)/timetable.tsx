@@ -17,7 +17,6 @@ import type {
   CourseConfig,
   DayOfWeek,
   ManualSlotInput,
-  SlotConflict,
 } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
@@ -47,8 +46,8 @@ export default function TimetableScreen() {
     isLoading,
     generateTimetable,
     resolveConflict,
-    resolveAllAutoConflicts,
-    revertAutoConflictResolution,
+    resolveAllPreferred,
+    revertConflictResolution,
   } = useTimetableStore();
   const {
     courses: attendanceCourses,
@@ -79,12 +78,10 @@ export default function TimetableScreen() {
     typeof InteractionManager.runAfterInteractions
   > | null>(null);
   const isFocused = useIsFocused();
-  const unresolvedConflictCount = conflicts.filter((conflict: SlotConflict) => {
-    if (conflict.type === "manual-auto") return true;
-    return conflict.resolvedChoice === null;
-  }).length;
+  const unresolvedConflictCount = conflicts.filter(
+    (c) => c.resolvedChoice === null,
+  ).length;
 
-  // recompute day on focus
   const getDefaultDay = (): DayOfWeek => {
     const day = new Date().getDay() as DayOfWeek;
     return day >= 1 && day <= 5 ? day : 1;
@@ -111,7 +108,6 @@ export default function TimetableScreen() {
     }, [scheduleTimetableRecompute]),
   );
 
-  // generate timetable on first load
   useEffect(() => {
     if (
       !hasGenerated.current &&
@@ -420,7 +416,6 @@ export default function TimetableScreen() {
         {/* main content */}
         {displaySlots.length > 0 && (
           <>
-            {/* up next carousel */}
             <View className="mt-3">
               <Text
                 className="mb-2 text-base font-semibold tracking-[0.2px]"
@@ -436,7 +431,6 @@ export default function TimetableScreen() {
               />
             </View>
 
-            {/* day schedule */}
             <View className="mt-4">
               <View className="flex-row items-center justify-between">
                 <Text
@@ -541,8 +535,8 @@ export default function TimetableScreen() {
         visible={showSlotConflictModal && conflicts.length > 0}
         conflicts={conflicts}
         onResolve={resolveConflict}
-        onResolveAllPreferred={() => resolveAllAutoConflicts("preferred")}
-        onRevertAutoConflict={revertAutoConflictResolution}
+        onResolveAllPreferred={resolveAllPreferred}
+        onRevertConflict={revertConflictResolution}
         onClose={() => setShowSlotConflictModal(false)}
       />
     </Container>
