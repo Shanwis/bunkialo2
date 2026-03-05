@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth-store";
 import type { LoginTheme } from "@/types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -41,6 +42,64 @@ const LOGIN_THEME: LoginTheme = {
   eyeColor: "#FAFAFA",
 };
 
+type ShaderQualityTier = 0 | 1 | 2;
+
+const LOGIN_SHADER_TIER_KEY = "@bunkialo/login-shader-tier";
+const LOGIN_SHADER_GUARD_KEY = "@bunkialo/login-shader-guard";
+const LOGIN_SHADER_GUARD_WINDOW_MS = 2 * 60 * 1000;
+const LOGIN_SHADER_GUARD_CLEAR_MS = 6500;
+
+const SHADER_PRESETS: Record<
+  ShaderQualityTier,
+  {
+    speed: number;
+    intensity: number;
+    size: number;
+    amplitude: number;
+    brightness: number;
+    resolutionScale: number;
+    settleMs: number;
+    animated: boolean;
+  }
+> = {
+  0: {
+    speed: 3.2,
+    intensity: 0.13,
+    size: 1.8,
+    amplitude: 0.16,
+    brightness: 0.02,
+    resolutionScale: 0.35,
+    settleMs: 3000,
+    animated: true,
+  },
+  1: {
+    speed: 2.6,
+    intensity: 0.1,
+    size: 1.6,
+    amplitude: 0.12,
+    brightness: 0.015,
+    resolutionScale: 0.35,
+    settleMs: 2200,
+    animated: true,
+  },
+  2: {
+    speed: 1.9,
+    intensity: 0.08,
+    size: 1.45,
+    amplitude: 0.09,
+    brightness: 0.012,
+    resolutionScale: 0.25,
+    settleMs: 1500,
+    animated: false,
+  },
+};
+
+const parseShaderTier = (rawTier: string | null): ShaderQualityTier => {
+  if (rawTier === "1") return 1;
+  if (rawTier === "2") return 2;
+  return 0;
+};
+
 export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -48,12 +107,66 @@ export default function LoginScreen() {
   const [usernameFocused, setUsernameFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [gradientReady, setGradientReady] = useState(false);
+  const [shaderTier, setShaderTier] = useState<ShaderQualityTier>(0);
   const { login, isLoading, error, setError } = useAuthStore();
   const { width, height } = useWindowDimensions();
   const heroProgress = useRef(new Animated.Value(0)).current;
   const cardProgress = useRef(new Animated.Value(0)).current;
   const isLandscape = width > height;
   const isCompactHeight = height < 780;
+  const shaderPreset = SHADER_PRESETS[shaderTier];
+
+  useEffect(() => {
+    let mounted = true;
+    let guardClearTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const initShaderTier = async () => {
+      try {
+        const [storedTier, guardTimestampRaw] = await Promise.all([
+          AsyncStorage.getItem(LOGIN_SHADER_TIER_KEY),
+          AsyncStorage.getItem(LOGIN_SHADER_GUARD_KEY),
+        ]);
+
+        let nextTier = parseShaderTier(storedTier);
+
+        if (guardTimestampRaw) {
+          const guardTimestamp = Number(guardTimestampRaw);
+          const hasRecentGuard =
+            Number.isFinite(guardTimestamp) &&
+            Date.now() - guardTimestamp <= LOGIN_SHADER_GUARD_WINDOW_MS;
+
+          if (hasRecentGuard && nextTier < 2) {
+            nextTier = (nextTier + 1) as ShaderQualityTier;
+            await AsyncStorage.setItem(LOGIN_SHADER_TIER_KEY, String(nextTier));
+          }
+        }
+
+        await AsyncStorage.setItem(LOGIN_SHADER_GUARD_KEY, String(Date.now()));
+
+        if (mounted) {
+          setShaderTier(nextTier);
+        }
+
+        guardClearTimeout = setTimeout(() => {
+          void AsyncStorage.removeItem(LOGIN_SHADER_GUARD_KEY);
+        }, LOGIN_SHADER_GUARD_CLEAR_MS);
+      } catch {
+        if (mounted) {
+          setShaderTier(1);
+        }
+      }
+    };
+
+    void initShaderTier();
+
+    return () => {
+      mounted = false;
+      if (guardClearTimeout) {
+        clearTimeout(guardClearTimeout);
+      }
+      void AsyncStorage.removeItem(LOGIN_SHADER_GUARD_KEY);
+    };
+  }, []);
 
   // defer gradient mount until after initial layout/animations
   useEffect(() => {
@@ -67,22 +180,26 @@ export default function LoginScreen() {
     heroProgress.setValue(0);
     cardProgress.setValue(0);
 
+    const heroDuration = shaderTier === 0 ? 150 : shaderTier === 1 ? 130 : 110;
+    const cardDuration = shaderTier === 0 ? 190 : shaderTier === 1 ? 160 : 130;
+    const cardDelay = shaderTier === 2 ? 16 : 30;
+
     Animated.parallel([
       Animated.timing(heroProgress, {
         toValue: 1,
-        duration: 150,
+        duration: heroDuration,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(cardProgress, {
         toValue: 1,
-        duration: 190,
-        delay: 30,
+        duration: cardDuration,
+        delay: cardDelay,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
-  }, [cardProgress, heroProgress]);
+  }, [cardProgress, heroProgress, shaderTier]);
 
   const handleUsernameChange = useCallback(
     (value: string) => {
@@ -151,13 +268,14 @@ export default function LoginScreen() {
       {gradientReady && (
         <GrainyGradient
           colors={["#111113", "#1B1B20", "#26262C", "#16161A"]}
-          speed={3.2}
-          intensity={0.13}
-          size={1.8}
-          amplitude={0.16}
-          brightness={0.02}
-          resolutionScale={0.5}
-          settleMs={3000}
+          speed={shaderPreset.speed}
+          intensity={shaderPreset.intensity}
+          size={shaderPreset.size}
+          amplitude={shaderPreset.amplitude}
+          brightness={shaderPreset.brightness}
+          resolutionScale={shaderPreset.resolutionScale}
+          settleMs={shaderPreset.settleMs}
+          animated={shaderPreset.animated}
           style={styles.absoluteFill}
         />
       )}

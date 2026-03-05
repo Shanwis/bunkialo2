@@ -77,14 +77,15 @@ jobs:
           command: eas update --auto --branch pr-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
           comment: ${{ github.event_name == 'pull_request' }}
 
-      - name: Comment on PR (manual trigger)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Comment on PR
         env:
           GH_TOKEN: ${{ github.token }}
           UPDATE_LINK: ${{ steps.preview.outputs.link }}
           QR_LINK: ${{ steps.preview.outputs.qr }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          TRIGGER_TYPE: ${{ github.event_name == 'workflow_dispatch' && 'manual trigger' || 'auto' }}
         run: |
-          gh pr comment ${{ github.event.inputs.pr_number }} --body "**Preview (manual trigger)**
+          gh pr comment $PR_NUMBER --body "**Preview**
 
           ![QR Code]($QR_LINK)
 
