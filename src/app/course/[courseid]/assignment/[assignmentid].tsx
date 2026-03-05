@@ -284,6 +284,61 @@ const normalizeMimeType = (contentType: string | null): string => {
   return baseType || "*/*";
 };
 
+const getFileIconName = (name: string): keyof typeof Ionicons.glyphMap => {
+  const ext = name.split(".").pop()?.toLowerCase();
+
+  switch (ext) {
+    case "pdf":
+      return "document-text";
+
+    case "jpg":
+    case "jpeg":
+    case "png":
+    case "gif":
+    case "webp":
+    case "svg":
+      return "image";
+
+    case "mp4":
+    case "mov":
+    case "avi":
+    case "mkv":
+      return "videocam";
+
+    case "mp3":
+    case "wav":
+    case "aac":
+      return "musical-notes";
+
+    case "zip":
+    case "rar":
+    case "7z":
+    case "tar":
+    case "gz":
+      return "archive";
+
+    case "doc":
+    case "docx":
+      return "document";
+
+    case "ppt":
+    case "pptx":
+      return "easel";
+
+    case "xls":
+    case "xlsx":
+    case "csv":
+      return "grid";
+
+    case "txt":
+    case "md":
+      return "document-outline";
+
+    default:
+      return "attach";
+  }
+};
+
 const openExternal = async (url: string, preferredName: string) => {
   if (downloadingUrlSet[url]) return;
 
@@ -306,6 +361,7 @@ const openExternal = async (url: string, preferredName: string) => {
 
     if (Platform.OS === "android") {
       const contentUri = await getContentUriAsync(result.uri);
+
       await startActivityAsync("android.intent.action.VIEW", {
         data: contentUri,
         type: mime,
@@ -510,31 +566,64 @@ const openExternal = async (url: string, preferredName: string) => {
               {details.resources && details.resources.length > 0 && (
               <View className="mt-3 gap-2">
                 <Text
-                  className="text-[13px] font-semibold"
+                  className="text-[15px] font-semibold"
                   style={{ color: theme.text }}
                 >
                   Resources
                 </Text>
 
-                {details.resources.map((resource) => (
-                  <Pressable
-                    key={resource.id}
-                    className="rounded-xl border px-3 py-2"
-                    style={{
-                      borderColor: theme.border,
-                      backgroundColor: theme.background,
-                    }}
-                    onPress={() =>void openExternal(resource.url, breadcrumbAssignment)}
-                  >
-                    <Text
-                      className="text-[13px]"
-                      style={{ color: Colors.accent }}
-                      numberOfLines={2}
+                {details.resources.map((resource) => {
+                  const preferredName =
+                    resource.name?.trim() ||
+                    resource.url.split("/").pop() ||
+                    "assignment-resource";
+
+                  const iconName = getFileIconName(preferredName);
+                  const isDownloading = Boolean(downloadingUrlSet[resource.url]);
+
+                  return (
+                    <Pressable
+                      key={resource.id}
+                      disabled={isDownloading}
+                      className="flex-row items-center gap-3 rounded-xl border px-3 py-3"
+                      style={{
+                        borderColor: theme.border,
+                        backgroundColor: theme.background,
+                        opacity: isDownloading ? 0.6 : 1,
+                      }}
+                      onPress={() => {
+                        if (isDownloading) return;
+                        void openExternal(resource.url, preferredName);
+                      }}
                     >
-                      {resource.name}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Ionicons
+                        name={iconName}
+                        size={20}
+                        color={Colors.accent}
+                      />
+
+                      <View className="flex-1">
+                        <Text
+                          className="text-[13px] font-medium"
+                          style={{ color: theme.text }}
+                          numberOfLines={2}
+                        >
+                          {preferredName}
+                        </Text>
+                      </View>
+
+                      {isDownloading ? (
+                        <ActivityIndicator size="small" color={theme.textSecondary} />
+                      ) : (
+                        <Ionicons
+                          name="download-outline"
+                          size={18}
+                          color={theme.textSecondary}
+                        />
+                      )}
+                    </Pressable>
+                  );
+                })}
               </View>
             )}
             </View>
