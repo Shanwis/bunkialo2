@@ -21,6 +21,7 @@ export interface AssignmentDetails {
   allowSubmissionsFrom: number | null;
   descriptionHtml: string | null;
   descriptionText: string | null;
+  resources: { id: string; name: string; url: string }[];
   submissionStatusText: string | null;
   gradingStatusText: string | null;
   timeRemainingText: string | null;

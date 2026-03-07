@@ -23,6 +23,12 @@ import {
   View,
 } from "react-native";
 import { formatSyncTime } from "../../utils/course-utils";
+import { downloadLmsResourceWithSession } from "@/services/lms-download";
+import { getContentUriAsync } from "expo-file-system/legacy";
+import { startActivityAsync } from "expo-intent-launcher";
+import { isAvailableAsync, shareAsync } from "expo-sharing";
+import { Platform } from "react-native";
+import { debug } from "@/utils/debug";
 
 const formatDateTime = (timestamp: number | null): string => {
   if (!timestamp) return "Not available";
@@ -111,6 +117,10 @@ export default function AssignmentDetailScreen() {
   const [onlineText, setOnlineText] = useState("");
   const [files, setFiles] = useState<AssignmentUploadLocalFile[]>([]);
   const [hasSeededOnlineText, setHasSeededOnlineText] = useState(false);
+
+  const [downloadingUrlSet, setDownloadingUrlSet] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
     if (!assignmentId || !hasHydrated) return;
@@ -268,6 +278,119 @@ export default function AssignmentDetailScreen() {
 
     Toast.show(result.message, { type: "error" });
   };
+    const FLAG_GRANT_READ_URI_PERMISSION = 1;
+
+const normalizeMimeType = (contentType: string | null): string => {
+  const baseType = contentType?.split(";")[0]?.trim().toLowerCase();
+  return baseType || "*/*";
+};
+
+const getFileIconName = (name: string): keyof typeof Ionicons.glyphMap => {
+  const ext = name.split(".").pop()?.toLowerCase();
+
+  switch (ext) {
+    case "pdf":
+      return "document-text";
+
+    case "jpg":
+    case "jpeg":
+    case "png":
+    case "gif":
+    case "webp":
+    case "svg":
+      return "image";
+
+    case "mp4":
+    case "mov":
+    case "avi":
+    case "mkv":
+      return "videocam";
+
+    case "mp3":
+    case "wav":
+    case "aac":
+      return "musical-notes";
+
+    case "zip":
+    case "rar":
+    case "7z":
+    case "tar":
+    case "gz":
+      return "archive";
+
+    case "doc":
+    case "docx":
+      return "document";
+
+    case "ppt":
+    case "pptx":
+      return "easel";
+
+    case "xls":
+    case "xlsx":
+    case "csv":
+      return "grid";
+
+    case "txt":
+    case "md":
+      return "document-outline";
+
+    default:
+      return "attach";
+  }
+};
+
+const openExternal = async (url: string, preferredName: string) => {
+  if (downloadingUrlSet[url]) return;
+
+  setDownloadingUrlSet((prev) => ({ ...prev, [url]: true }));
+
+
+  try {
+      const result = await downloadLmsResourceWithSession(url, preferredName);
+      if (!result.success) {
+        Toast.show(result.message || "Download failed", { type: "error" });
+        setDownloadingUrlSet((prev) => {
+          const next = { ...prev };
+          delete next[url];
+          return next;
+        });
+        return;
+      }
+    const mime = normalizeMimeType(result.contentType);
+
+    if (Platform.OS === "android") {
+      const contentUri = await getContentUriAsync(result.uri);
+
+      await startActivityAsync("android.intent.action.VIEW", {
+        data: contentUri,
+        type: mime,
+        flags: FLAG_GRANT_READ_URI_PERMISSION,
+      });
+    } else {
+      const canShare = await isAvailableAsync();
+      if (canShare) {
+        await shareAsync(result.uri, { mimeType: mime });
+      } else {
+        await Linking.openURL(result.uri);
+      }
+    }
+
+    Toast.show("Downloaded successfully", { type: "success" });
+  } catch (error) {
+    debug.api("assignment resource open failed", error);
+
+    Toast.show("Downloaded but could not open file", {
+      type: "warning",
+    });
+  } finally {
+    setDownloadingUrlSet((prev) => {
+      const next = { ...prev };
+      delete next[url];
+      return next;
+    });
+  }
+};
 
   return (
     <Container className="relative">
@@ -442,6 +565,76 @@ export default function AssignmentDetailScreen() {
               <Text className="mt-2 text-[13px] leading-5" style={{ color: theme.textSecondary }}>
                 {details.descriptionText || "No assignment description provided."}
               </Text>
+              {details.resources && details.resources.length > 0 && (
+              <View className="mt-3 gap-2">
+                <Text
+                  className="text-[15px] font-semibold"
+                  style={{ color: theme.text }}
+                >
+                  Resources
+                </Text>
+
+                {details.resources.map((resource) => {
+                  const preferredName =
+                    resource.name?.trim() ||
+                    (() => {
+                      const raw = resource.url.split("/").pop()?.split("?")[0].split("#")[0] || "";
+                      try {
+                        return decodeURIComponent(raw);
+                      } catch {
+                        return raw;
+                      }
+                    })() ||
+                    "assignment-resource";
+
+                  const iconName = getFileIconName(preferredName);
+                  const isDownloading = Boolean(downloadingUrlSet[resource.url]);
+
+                  return (
+                    <Pressable
+                      key={resource.id}
+                      disabled={isDownloading}
+                      className="flex-row items-center gap-3 rounded-xl border px-3 py-3"
+                      style={{
+                        borderColor: theme.border,
+                        backgroundColor: theme.background,
+                        opacity: isDownloading ? 0.6 : 1,
+                      }}
+                      onPress={() => {
+                        if (isDownloading) return;
+                        void openExternal(resource.url, preferredName);
+                      }}
+                    >
+                      <Ionicons
+                        name={iconName}
+                        size={20}
+                        color={Colors.accent}
+                      />
+
+                      <View className="flex-1">
+                        <Text
+                          className="text-[13px] font-medium"
+                          style={{ color: theme.text }}
+                          numberOfLines={2}
+                        >
+                          {preferredName}
+                        </Text>
+                      </View>
+
+                      {isDownloading ? (
+                        <ActivityIndicator size="small" color={theme.textSecondary} />
+                      ) : (
+                        <Ionicons
+                          name="download-outline"
+                          size={18}
+                          color={theme.textSecondary}
+                        />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
             </View>
 
             <View className="rounded-2xl border p-4" style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}>
