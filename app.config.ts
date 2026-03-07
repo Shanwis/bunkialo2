@@ -58,6 +58,13 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => {
     plugins: [
       "expo-router",
       "expo-build-properties",
+      "expo-background-task",
+      [
+        "expo-notifications",
+        {
+          defaultChannel: "default",
+        },
+      ],
       [
         "expo-splash-screen",
         {

@@ -69,35 +69,32 @@ export default function DashboardScreen() {
   const [showDevInfo, setShowDevInfo] = useState(false);
   const isFocused = useIsFocused();
   const hasAutoRefreshed = useRef(false);
+  const hasCompletedInitialRefresh = useRef(false);
   const hasDeferredResourcePrefetch = useRef(false);
 
   useEffect(() => {
     if (!hasHydrated || hasAutoRefreshed.current) return;
     if (isOffline && lastSyncTime === null) return;
-    hasAutoRefreshed.current = true;
     if (isOffline) return;
-
-    const staleAfterMs = Math.max(5, refreshIntervalMinutes) * 60 * 1000;
-    const shouldRefresh =
-      lastSyncTime === null || Date.now() - lastSyncTime > staleAfterMs;
-    if (!shouldRefresh) return;
+    hasAutoRefreshed.current = true;
 
     const task = InteractionManager.runAfterInteractions(() => {
       if (lastSyncTime === null) {
-        fetchDashboard();
+        void fetchDashboard({ source: "foreground" }).finally(() => {
+          hasCompletedInitialRefresh.current = true;
+        });
       } else {
-        fetchDashboard({ silent: true });
+        void fetchDashboard({
+          silent: true,
+          source: "foreground",
+        }).finally(() => {
+          hasCompletedInitialRefresh.current = true;
+        });
       }
     });
 
     return () => task.cancel();
-  }, [
-    fetchDashboard,
-    hasHydrated,
-    isOffline,
-    lastSyncTime,
-    refreshIntervalMinutes,
-  ]);
+  }, [fetchDashboard, hasHydrated, isOffline, lastSyncTime]);
 
   // Start background refresh for notifications
   useEffect(() => {
@@ -144,12 +141,39 @@ export default function DashboardScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      return () => setShowFabMenu(false);
-    }, [setShowFabMenu]),
+      const staleAfterMs = Math.max(5, refreshIntervalMinutes) * 60 * 1000;
+      const shouldRefreshOnFocus =
+        hasCompletedInitialRefresh.current &&
+        hasHydrated &&
+        !isOffline &&
+        lastSyncTime !== null &&
+        Date.now() - lastSyncTime > staleAfterMs;
+
+      let task: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
+        null;
+
+      if (shouldRefreshOnFocus) {
+        task = InteractionManager.runAfterInteractions(() => {
+          void fetchDashboard({ silent: true, source: "foreground" });
+        });
+      }
+
+      return () => {
+        task?.cancel();
+        setShowFabMenu(false);
+      };
+    }, [
+      fetchDashboard,
+      hasHydrated,
+      isOffline,
+      lastSyncTime,
+      refreshIntervalMinutes,
+      setShowFabMenu,
+    ]),
   );
 
   const handleRefresh = useCallback(() => {
-    fetchDashboard();
+    void fetchDashboard({ source: "foreground" });
   }, [fetchDashboard]);
 
   const hasOverdue = overdueEvents.length > 0;

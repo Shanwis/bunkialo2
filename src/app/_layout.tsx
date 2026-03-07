@@ -1,5 +1,6 @@
 import "react-native-reanimated";
 import "../global.css";
+import "@/background";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";

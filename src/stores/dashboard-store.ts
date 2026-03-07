@@ -1,14 +1,30 @@
-import { fetchDashboardEvents } from "@/services/dashboard";
+import type { DashboardSyncSource } from "@/services/dashboard-sync";
+import { runDashboardSync } from "@/services/dashboard-sync";
 import type { DashboardLog, DashboardState, TimelineEvent } from "@/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+type DashboardFetchResult =
+  | {
+      newUpcomingCount: number;
+      ok: true;
+      overdueCount: number;
+      upcomingCount: number;
+    }
+  | {
+      error: string;
+      ok: false;
+    };
+
 interface DashboardStore extends DashboardState {
   upcomingEvents: TimelineEvent[];
   overdueEvents: TimelineEvent[];
   hasHydrated: boolean;
-  fetchDashboard: (options?: { silent?: boolean }) => Promise<void>;
+  fetchDashboard: (options?: {
+    silent?: boolean;
+    source?: DashboardSyncSource;
+  }) => Promise<DashboardFetchResult>;
   addLog: (message: string, type: DashboardLog["type"]) => void;
   clearLogs: () => void;
   clearDashboard: () => void;
@@ -34,25 +50,27 @@ export const useDashboardStore = create<DashboardStore>()(
 
       fetchDashboard: async (options) => {
         const silent = options?.silent ?? false;
+        const source = options?.source ?? "foreground";
+
         if (silent) {
           set((state) => ({ error: null, isLoading: state.isLoading }));
         } else {
           set({ isLoading: true, error: null });
         }
+
         const addLog = get().addLog;
 
         try {
           addLog("Starting dashboard sync...", "info");
 
-          const { upcoming, overdue } = await fetchDashboardEvents();
-
-          const allEvents = [...overdue, ...upcoming];
+          const { upcoming, overdue, newUpcomingEvents, syncedAt } =
+            await runDashboardSync({ source });
 
           set((state) => ({
-            events: allEvents,
+            events: [...overdue, ...upcoming],
             upcomingEvents: upcoming,
             overdueEvents: overdue,
-            lastSyncTime: Date.now(),
+            lastSyncTime: syncedAt,
             isLoading: silent ? state.isLoading : false,
           }));
 
@@ -60,14 +78,35 @@ export const useDashboardStore = create<DashboardStore>()(
             `Synced ${upcoming.length} upcoming, ${overdue.length} overdue`,
             "success",
           );
+
+          if (source === "background" && newUpcomingEvents.length > 0) {
+            addLog(
+              `Found ${newUpcomingEvents.length} new upcoming task${newUpcomingEvents.length === 1 ? "" : "s"}`,
+              "info",
+            );
+          }
+
+          return {
+            newUpcomingCount: newUpcomingEvents.length,
+            ok: true,
+            overdueCount: overdue.length,
+            upcomingCount: upcoming.length,
+          };
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Unknown error";
+
           set((state) => ({
             error: message,
             isLoading: silent ? state.isLoading : false,
           }));
+
           addLog(`Sync failed: ${message}`, "error");
+          return { error: message, ok: false };
+        } finally {
+          if (!silent) {
+            set({ isLoading: false });
+          }
         }
       },
 

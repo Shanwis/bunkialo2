@@ -1,95 +1,17 @@
+import {
+  DASHBOARD_BACKGROUND_INTERVAL_MINUTES,
+  DASHBOARD_TASK_NAME,
+} from "@/constants/dashboard";
+import { clearDashboardNotificationState } from "@/services/dashboard-notifications";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import type { TimelineEvent } from "@/types";
+import {
+  cancelAllNotifications,
+  hasNotificationPermissions,
+  sendImmediateNotification,
+} from "@/utils/notifications";
 import * as BackgroundTask from "expo-background-task";
-import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
-import { Platform } from "react-native";
-
-const DASHBOARD_TASK_NAME = "dashboard-background-sync";
-const scheduledNotifications = new Map<string, string[]>();
-
-const ensureNotificationChannel = async (): Promise<void> => {
-  if (Platform.OS !== "android") return;
-
-  await Notifications.setNotificationChannelAsync("default", {
-    name: "Default",
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 250, 250, 250],
-    lightColor: "#FF231F7C",
-  });
-};
-
-export const requestNotificationPermissions = async (): Promise<boolean> => {
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  return finalStatus === "granted";
-};
-
-export const scheduleEventNotification = async (
-  event: TimelineEvent,
-  minutesBefore: number,
-): Promise<string | null> => {
-  const notificationTime = event.timesort * 1000 - minutesBefore * 60 * 1000;
-  const now = Date.now();
-
-  if (notificationTime <= now) return null;
-
-  await ensureNotificationChannel();
-
-  const notificationId = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: `${event.activityname}`,
-      body: `Due in ${minutesBefore} minutes - ${event.course.shortname}`,
-      data: { eventId: event.id, url: event.url },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: new Date(notificationTime),
-    },
-  });
-
-  return notificationId;
-};
-
-export const scheduleAllEventNotifications = async (
-  events: TimelineEvent[],
-  reminderMinutes: number[],
-): Promise<void> => {
-  const settings = useSettingsStore.getState();
-  if (!settings.notificationsEnabled) return;
-
-  // Request permissions before scheduling
-  const hasPermission = await requestNotificationPermissions();
-  if (!hasPermission) {
-    console.log("Notification permissions not granted");
-    return;
-  }
-
-  await cancelAllScheduledNotifications();
-
-  for (const event of events) {
-    const ids: string[] = [];
-    for (const mins of reminderMinutes) {
-      const id = await scheduleEventNotification(event, mins);
-      if (id) ids.push(id);
-    }
-    if (ids.length > 0) {
-      scheduledNotifications.set(String(event.id), ids);
-    }
-  }
-};
-
-export const cancelAllScheduledNotifications = async (): Promise<void> => {
-  await Notifications.cancelAllScheduledNotificationsAsync();
-  scheduledNotifications.clear();
-};
 
 const notifyDevSyncResult = async (params: {
   success: boolean;
@@ -97,76 +19,78 @@ const notifyDevSyncResult = async (params: {
   overdueCount: number;
   errorMessage?: string;
 }): Promise<void> => {
-  if (!__DEV__) return;
+  if (!__DEV__) {
+    return;
+  }
 
   const { devDashboardSyncEnabled } = useSettingsStore.getState();
-  if (!devDashboardSyncEnabled) return;
+  if (!devDashboardSyncEnabled) {
+    return;
+  }
 
-  const hasPermission = await requestNotificationPermissions();
-  if (!hasPermission) return;
-
-  await ensureNotificationChannel();
+  const hasPermission = await hasNotificationPermissions();
+  if (!hasPermission) {
+    return;
+  }
 
   const title = params.success ? "Dashboard Sync" : "Dashboard Sync Failed";
   const body = params.success
     ? `Synced ${params.upcomingCount} upcoming, ${params.overdueCount} overdue`
     : `Sync failed${params.errorMessage ? `: ${params.errorMessage}` : ""}`;
 
-  await Notifications.scheduleNotificationAsync({
-    content: { title, body },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: 1,
-    },
-  });
+  await sendImmediateNotification({ title, body });
 };
 
-const runDashboardSync =
+const runDashboardBackgroundSync =
   async (): Promise<BackgroundTask.BackgroundTaskResult> => {
     const dashboardStore = useDashboardStore.getState();
+    const result = await dashboardStore.fetchDashboard({
+      silent: true,
+      source: "background",
+    });
 
-    try {
-      await dashboardStore.fetchDashboard({ silent: true });
-      const { upcomingEvents, overdueEvents } = useDashboardStore.getState();
-      const { reminders, notificationsEnabled } = useSettingsStore.getState();
-
-      if (notificationsEnabled && upcomingEvents.length > 0) {
-        await scheduleAllEventNotifications(upcomingEvents, reminders);
-      }
-
+    if (result.ok) {
       await notifyDevSyncResult({
         success: true,
-        upcomingCount: upcomingEvents.length,
-        overdueCount: overdueEvents.length,
+        upcomingCount: result.upcomingCount,
+        overdueCount: result.overdueCount,
       });
 
       return BackgroundTask.BackgroundTaskResult.Success;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      dashboardStore.addLog(`Background sync failed: ${message}`, "error");
-      await notifyDevSyncResult({
-        success: false,
-        upcomingCount: 0,
-        overdueCount: 0,
-        errorMessage: message,
-      });
-      return BackgroundTask.BackgroundTaskResult.Failed;
     }
+
+    dashboardStore.addLog(`Background sync failed: ${result.error}`, "error");
+    await notifyDevSyncResult({
+      success: false,
+      upcomingCount: 0,
+      overdueCount: 0,
+      errorMessage: result.error,
+    });
+
+    return BackgroundTask.BackgroundTaskResult.Failed;
   };
 
 TaskManager.defineTask(DASHBOARD_TASK_NAME, async () => {
   try {
-    return await runDashboardSync();
+    return await runDashboardBackgroundSync();
   } catch {
     return BackgroundTask.BackgroundTaskResult.Failed;
   }
 });
 
-export const registerDashboardBackgroundTask = async (
-  intervalMinutes: number,
-): Promise<boolean> => {
+export const cancelAllScheduledNotifications = async (): Promise<void> => {
+  await cancelAllNotifications();
+  await clearDashboardNotificationState();
+};
+
+export const registerDashboardBackgroundTask = async (): Promise<boolean> => {
+  const isTaskManagerAvailable = await TaskManager.isAvailableAsync();
+  if (!isTaskManagerAvailable) {
+    return false;
+  }
+
   const status = await BackgroundTask.getStatusAsync();
-  if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
+  if (status !== BackgroundTask.BackgroundTaskStatus.Available) {
     return false;
   }
 
@@ -177,7 +101,7 @@ export const registerDashboardBackgroundTask = async (
   }
 
   await BackgroundTask.registerTaskAsync(DASHBOARD_TASK_NAME, {
-    minimumInterval: Math.max(15, intervalMinutes),
+    minimumInterval: DASHBOARD_BACKGROUND_INTERVAL_MINUTES,
   });
 
   return true;
@@ -192,8 +116,7 @@ export const unregisterDashboardBackgroundTask = async (): Promise<void> => {
 };
 
 export const syncDashboardBackgroundTask = async (): Promise<boolean> => {
-  const settings = useSettingsStore.getState();
-  return registerDashboardBackgroundTask(settings.refreshIntervalMinutes);
+  return registerDashboardBackgroundTask();
 };
 
 export const startBackgroundRefresh = (): void => {

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   cancelAllScheduledNotifications,
+  syncDashboardBackgroundTask,
   stopBackgroundRefresh,
 } from "@/background/dashboard-background";
 import {
@@ -65,6 +66,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
           isLoading: false,
           isOffline: false,
         });
+        try {
+          await syncDashboardBackgroundTask();
+        } catch (error) {
+          console.error("Failed to start dashboard background task", error);
+        }
         try {
           await syncWifixBackgroundTask();
         } catch (error) {
@@ -178,6 +184,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
           }
 
           set({ isOffline: false });
+          try {
+            await syncDashboardBackgroundTask();
+          } catch (error) {
+            console.error("Failed to start dashboard background task", error);
+          }
           try {
             await syncWifixBackgroundTask();
           } catch (error) {
