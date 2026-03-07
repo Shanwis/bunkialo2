@@ -7,9 +7,11 @@ import { Container } from "@/components/ui/container";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/stores/auth-store";
+import { useAttendanceStore } from "@/stores/attendance-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { useLmsResourcesStore } from "@/stores/lms-resources-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { scheduleIdleTask } from "@/utils/scheduling";
 import { initializeNotifications } from "@/utils/notifications";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
@@ -55,6 +57,7 @@ export default function DashboardScreen() {
     fetchDashboard,
     hasHydrated,
   } = useDashboardStore();
+  const fetchAttendance = useAttendanceStore((state) => state.fetchAttendance);
   const { isOffline, setOffline, username } = useAuthStore();
   const {
     hasHydrated: resourcesHydrated,
@@ -71,6 +74,27 @@ export default function DashboardScreen() {
   const hasAutoRefreshed = useRef(false);
   const hasCompletedInitialRefresh = useRef(false);
   const hasDeferredResourcePrefetch = useRef(false);
+  const isAttendanceRefreshQueued = useRef(false);
+
+  const queueInvisibleAttendanceRefresh = useCallback(() => {
+    if (isAttendanceRefreshQueued.current) return;
+    isAttendanceRefreshQueued.current = true;
+
+    const interactionTask = InteractionManager.runAfterInteractions(() => {
+      const cancelIdleTask = scheduleIdleTask(() => {
+        void fetchAttendance({ background: true }).finally(() => {
+          isAttendanceRefreshQueued.current = false;
+        });
+      }, { timeoutMs: 1500, fallbackDelayMs: 120 });
+
+      return cancelIdleTask;
+    });
+
+    return () => {
+      interactionTask.cancel();
+      isAttendanceRefreshQueued.current = false;
+    };
+  }, [fetchAttendance]);
 
   useEffect(() => {
     if (!hasHydrated || hasAutoRefreshed.current) return;
@@ -80,21 +104,35 @@ export default function DashboardScreen() {
 
     const task = InteractionManager.runAfterInteractions(() => {
       if (lastSyncTime === null) {
-        void fetchDashboard({ source: "foreground" }).finally(() => {
+        void (async () => {
+          const result = await fetchDashboard({ source: "foreground" });
+          if (result.ok) {
+            queueInvisibleAttendanceRefresh();
+          }
           hasCompletedInitialRefresh.current = true;
-        });
+        })();
       } else {
-        void fetchDashboard({
-          silent: true,
-          source: "foreground",
-        }).finally(() => {
+        void (async () => {
+          const result = await fetchDashboard({
+            silent: true,
+            source: "foreground",
+          });
+          if (result.ok) {
+            queueInvisibleAttendanceRefresh();
+          }
           hasCompletedInitialRefresh.current = true;
-        });
+        })();
       }
     });
 
     return () => task.cancel();
-  }, [fetchDashboard, hasHydrated, isOffline, lastSyncTime]);
+  }, [
+    fetchDashboard,
+    hasHydrated,
+    isOffline,
+    lastSyncTime,
+    queueInvisibleAttendanceRefresh,
+  ]);
 
   // Start background refresh for notifications
   useEffect(() => {
@@ -154,7 +192,15 @@ export default function DashboardScreen() {
 
       if (shouldRefreshOnFocus) {
         task = InteractionManager.runAfterInteractions(() => {
-          void fetchDashboard({ silent: true, source: "foreground" });
+          void (async () => {
+            const result = await fetchDashboard({
+              silent: true,
+              source: "foreground",
+            });
+            if (result.ok) {
+              queueInvisibleAttendanceRefresh();
+            }
+          })();
         });
       }
 
@@ -167,14 +213,20 @@ export default function DashboardScreen() {
       hasHydrated,
       isOffline,
       lastSyncTime,
+      queueInvisibleAttendanceRefresh,
       refreshIntervalMinutes,
       setShowFabMenu,
     ]),
   );
 
   const handleRefresh = useCallback(() => {
-    void fetchDashboard({ source: "foreground" });
-  }, [fetchDashboard]);
+    void (async () => {
+      const result = await fetchDashboard({ source: "foreground" });
+      if (result.ok) {
+        queueInvisibleAttendanceRefresh();
+      }
+    })();
+  }, [fetchDashboard, queueInvisibleAttendanceRefresh]);
 
   const hasOverdue = overdueEvents.length > 0;
   const isEmpty = upcomingEvents.length === 0 && overdueEvents.length === 0;

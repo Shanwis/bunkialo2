@@ -9,7 +9,10 @@ interface AttendanceStoreState extends AttendanceState {
 }
 
 interface AttendanceActions {
-  fetchAttendance: (options?: { silent?: boolean }) => Promise<void>;
+  fetchAttendance: (options?: {
+    background?: boolean;
+    silent?: boolean;
+  }) => Promise<void>;
   clearAttendance: () => void;
   setHasHydrated: (hasHydrated: boolean) => void;
 }
@@ -28,20 +31,35 @@ export const useAttendanceStore = create<
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       fetchAttendance: async (options) => {
+        const background = options?.background ?? false;
         const silent = options?.silent ?? false;
-        if (silent) {
+        if (background) {
+          // Background refreshes should stay invisible to the UI.
+        } else if (silent) {
           set((state) => ({ error: null, isLoading: state.isLoading }));
         } else {
           set({ isLoading: true, error: null });
         }
         try {
           const courses = await scraper.fetchAllAttendance();
+          if (background) {
+            set({
+              courses,
+              lastSyncTime: Date.now(),
+            });
+            return;
+          }
+
           set((state) => ({
             courses,
             lastSyncTime: Date.now(),
             isLoading: silent ? state.isLoading : false,
           }));
         } catch (error) {
+          if (background) {
+            return;
+          }
+
           const message =
             error instanceof Error
               ? error.message
