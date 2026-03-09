@@ -76,7 +76,7 @@ export function SlotConflictModal({
     (c): c is OutlierSlotConflict => c.type === "outlier-review",
   );
 
-  const [activeTab, setActiveTab] = useState<Tab>("clashes");
+  const [activeTab, setActiveTab] = useState<Tab>("outliers");
   const [dayFilter, setDayFilter] = useState<DayFilter>("all");
   const [selectionOverrides, setSelectionOverrides] = useState<
     Record<string, "preferred" | "alternative" | "keep" | "ignore" | null>
@@ -123,7 +123,7 @@ export function SlotConflictModal({
   useEffect(() => {
     if (!visible) return;
     setActiveTab(
-      timeClashes.length === 0 && outliers.length > 0 ? "outliers" : "clashes",
+      outliers.length > 0 ? "outliers" : "clashes",
     );
     setDayFilter("all");
   }, [visible, timeClashes.length, outliers.length]);
@@ -278,6 +278,13 @@ export function SlotConflictModal({
           >
             {[
               {
+                key: "outliers" as Tab,
+                icon: "flag-outline" as const,
+                label: "Outliers",
+                count: outliers.length,
+                hasUnresolved: outliers.some((c) => c.resolvedChoice === null),
+              },
+              {
                 key: "clashes" as Tab,
                 icon: "time-outline" as const,
                 label: "Time Clashes",
@@ -285,13 +292,6 @@ export function SlotConflictModal({
                 hasUnresolved: timeClashes.some(
                   (c) => c.resolvedChoice === null,
                 ),
-              },
-              {
-                key: "outliers" as Tab,
-                icon: "flag-outline" as const,
-                label: "Outliers",
-                count: outliers.length,
-                hasUnresolved: outliers.some((c) => c.resolvedChoice === null),
               },
             ].map((tab) => (
               <Pressable
