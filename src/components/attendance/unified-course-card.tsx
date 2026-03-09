@@ -310,15 +310,16 @@ export function UnifiedCourseCard({
   }, [bunksByDay, pastBunks, selectedDate]);
 
   // bunks display
+  const bunksLeft = stats?.bunksLeft ?? 0;
   const bunksDisplay = showTotal
     ? `${stats?.usedBunks ?? 0}/${stats?.totalBunks ?? 0}`
-    : (stats?.bunksLeft ?? 0).toString();
+    : bunksLeft.toString();
   const bunksLabel = showTotal ? "used" : "left";
   const bunksColor = !isConfigured
     ? theme.textSecondary
-    : (stats?.bunksLeft ?? 0) <= 0
+    : bunksLeft < 0
       ? Colors.status.danger
-      : (stats?.bunksLeft ?? 0) <= 3
+      : bunksLeft <= 3
         ? Colors.status.warning
         : Colors.status.success;
 
