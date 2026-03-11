@@ -1,6 +1,9 @@
 name: OTA Update (production)
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       update_message:
@@ -62,5 +65,17 @@ jobs:
       - name: Bump version (OTA patch)
         run: bun x npm version patch --no-git-tag-version
 
+      - name: Resolve update message
+        id: update-message
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            message="${{ inputs.update_message }}"
+          else
+            message="Auto OTA: ${{ github.event.head_commit.message }}"
+          fi
+
+          message="${message//$'\n'/ }"
+          echo "message=${message}" >> "$GITHUB_OUTPUT"
+
       - name: Publish OTA update to production branch
-        run: eas update --branch production --message "${{ inputs.update_message }}"
+        run: eas update --branch production --message "${{ steps.update-message.outputs.message }}"
