@@ -219,7 +219,8 @@ export const MESS_MENU: DayMenu[] = [
         "Drink: Sweet Lassi",
       ]),
       createMeal("snacks", [
-        "Sweetcorn(boiled)",
+        "Onion Vada",
+        "Steamed kerala banana",
         "Bread",
         "Jam",
         "Butter",
@@ -362,8 +363,7 @@ export const MESS_MENU: DayMenu[] = [
         "Salad",
       ]),
       createMeal("snacks", [
-        "Onion Vada",
-        "Steamed kerala banana",
+        "Sweetcorn(boiled)",
         "Bread",
         "Jam",
         "Butter",
