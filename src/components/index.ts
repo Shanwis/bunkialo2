@@ -16,6 +16,9 @@ export * from "./mess";
 // Shared components
 export * from "./shared";
 
+// Settings components
+export * from "./settings";
+
 // UI components
 export * from "./ui";
 

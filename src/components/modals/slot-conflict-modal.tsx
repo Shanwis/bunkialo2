@@ -120,6 +120,26 @@ export function SlotConflictModal({
     return Array.from(groups.entries()).sort(([a], [b]) => a - b);
   }, [filteredTimeClashes]);
 
+  const sortedOutliers = useMemo(
+    () =>
+      [...outliers].sort((a, b) => {
+        if (a.stats.score !== b.stats.score) {
+          return b.stats.score - a.stats.score;
+        }
+        if (a.stats.occurrenceCount !== b.stats.occurrenceCount) {
+          return b.stats.occurrenceCount - a.stats.occurrenceCount;
+        }
+        if (a.slot.dayOfWeek !== b.slot.dayOfWeek) {
+          return a.slot.dayOfWeek - b.slot.dayOfWeek;
+        }
+        if (a.slot.startTime !== b.slot.startTime) {
+          return a.slot.startTime.localeCompare(b.slot.startTime);
+        }
+        return a.slot.courseName.localeCompare(b.slot.courseName);
+      }),
+    [outliers],
+  );
+
   useEffect(() => {
     if (!visible) return;
     setActiveTab(
@@ -626,7 +646,7 @@ export function SlotConflictModal({
 
             {activeTab === "outliers" && (
               <>
-                {outliers.length === 0 && (
+                {sortedOutliers.length === 0 && (
                   <View className="items-center py-6">
                     <Ionicons
                       name="flag-outline"
@@ -641,7 +661,7 @@ export function SlotConflictModal({
                     </Text>
                   </View>
                 )}
-                {outliers.map((conflict, idx) => {
+                {sortedOutliers.map((conflict, idx) => {
                   const globalIndex = getGlobalIndex(conflict);
                   const isResolved = conflict.resolvedChoice !== null;
 

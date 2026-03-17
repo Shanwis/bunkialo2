@@ -7,5 +7,8 @@ export const DASHBOARD_NOTIFICATION_CHANNELS = {
   updates: "dashboard-updates",
 } as const;
 
-export const DASHBOARD_NOTIFICATION_STORAGE_KEY =
+export const LEGACY_DASHBOARD_NOTIFICATION_STORAGE_KEY =
   "dashboard-notification-state-v1";
+
+export const DASHBOARD_NOTIFICATION_STORAGE_KEY =
+  "dashboard-notification-state-v2";

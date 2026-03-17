@@ -1,6 +1,7 @@
 import type { TimelineEvent } from "@/types";
 import { debug } from "@/utils/debug";
 import { api } from "./api";
+import { dedupeTimelineEvents } from "./dashboard-event-utils";
 
 interface MoodleTimelineResponse {
   error: boolean;
@@ -91,11 +92,25 @@ export const fetchDashboardEvents = async (
 
   const data = await postActionEventsByTimesort(sesskey, payload);
 
-  const upcoming = data[0]?.data?.events || [];
-  const overdue = (data[1]?.data?.events || []).map((event) => ({
+  const rawUpcoming = data[0]?.data?.events || [];
+  const rawOverdue = (data[1]?.data?.events || []).map((event) => ({
     ...event,
     overdue: true,
   }));
+  const upcoming = dedupeTimelineEvents(rawUpcoming);
+  const overdue = dedupeTimelineEvents(rawOverdue);
+
+  if (rawUpcoming.length !== upcoming.length) {
+    debug.scraper(
+      `Dropped ${rawUpcoming.length - upcoming.length} duplicate upcoming event(s)`,
+    );
+  }
+
+  if (rawOverdue.length !== overdue.length) {
+    debug.scraper(
+      `Dropped ${rawOverdue.length - overdue.length} duplicate overdue event(s)`,
+    );
+  }
 
   debug.scraper(`Found ${upcoming.length} timeline events`);
   debug.scraper(`Found ${overdue.length} overdue events`);
@@ -128,7 +143,14 @@ export const fetchTimelineEvents = async (
   ];
 
   const data = await postActionEventsByTimesort(sesskey, payload);
-  const events = data[0]?.data?.events || [];
+  const rawEvents = data[0]?.data?.events || [];
+  const events = dedupeTimelineEvents(rawEvents);
+
+  if (rawEvents.length !== events.length) {
+    debug.scraper(
+      `Dropped ${rawEvents.length - events.length} duplicate timeline event(s)`,
+    );
+  }
   debug.scraper(`Found ${events.length} timeline events`);
 
   return events;
@@ -161,10 +183,17 @@ export const fetchOverdueEvents = async (
   ];
 
   const data = await postActionEventsByTimesort(sesskey, payload);
-  const events = (data[0]?.data?.events || []).map((event) => ({
+  const rawEvents = (data[0]?.data?.events || []).map((event) => ({
     ...event,
     overdue: true,
   }));
+  const events = dedupeTimelineEvents(rawEvents);
+
+  if (rawEvents.length !== events.length) {
+    debug.scraper(
+      `Dropped ${rawEvents.length - events.length} duplicate overdue event(s)`,
+    );
+  }
   debug.scraper(`Found ${events.length} overdue events`);
 
   return events;
