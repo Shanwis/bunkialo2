@@ -1,5 +1,12 @@
 import { syncDashboardBackgroundTask } from "@/background/dashboard-background";
 import { syncWifixBackgroundTask } from "@/background/wifix-background";
+import {
+  CustomRemindersSection,
+  DashboardSettingsSection,
+  GeneralSettingsSection,
+  SettingsFooter,
+  WifixSettingsSection,
+} from "@/components/settings";
 import { ConfirmModal } from "@/components/modals/confirm-modal";
 import { SelectionModal } from "@/components/modals/selection-modal";
 import { LogsSection } from "@/components/shared/logs-section";
@@ -20,68 +27,8 @@ import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import * as Updates from "expo-updates";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  ScrollView,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import type { ThemePreference } from "@/types";
-
-type SettingRowProps = {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress?: () => void;
-  loading?: boolean;
-  danger?: boolean;
-  theme: typeof Colors.light;
-  rightElement?: React.ReactNode;
-};
-
-const SettingRow = ({
-  icon,
-  label,
-  onPress,
-  loading,
-  danger,
-  theme,
-  rightElement,
-}: SettingRowProps) => (
-  <Pressable
-    className="flex-row items-center justify-between px-4 py-3"
-    style={({ pressed }) => ({
-      backgroundColor:
-        pressed && onPress ? theme.backgroundSecondary : "transparent",
-    })}
-    onPress={onPress}
-    disabled={loading || !onPress}
-  >
-    <View className="flex-row items-center gap-2">
-      <Ionicons
-        name={icon}
-        size={20}
-        color={danger ? Colors.status.danger : theme.textSecondary}
-      />
-      <Text
-        className="text-[15px]"
-        style={{ color: danger ? Colors.status.danger : theme.text }}
-      >
-        {label}
-      </Text>
-    </View>
-    {loading ? (
-      <ActivityIndicator size="small" color={theme.textSecondary} />
-    ) : rightElement ? (
-      rightElement
-    ) : onPress ? (
-      <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-    ) : null}
-  </Pressable>
-);
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme();
@@ -91,11 +38,13 @@ export default function SettingsScreen() {
   const { username, logout } = useAuthStore();
   const { clearAttendance } = useAttendanceStore();
   const { resetToLms } = useBunkStore();
-  const { logs, clearLogs } = useDashboardStore();
+  const { backgroundActivity, logs, clearLogs } = useDashboardStore();
   const {
+    backgroundSyncActivityEnabled,
     refreshIntervalMinutes,
     reminders,
     notificationsEnabled,
+    toggleBackgroundSyncActivity,
     setRefreshInterval,
     addReminder,
     removeReminder,
@@ -325,7 +274,6 @@ export default function SettingsScreen() {
         </View>
 
         <View className="flex-1 px-6 pb-12">
-          {/* Profile */}
           <View className="items-center gap-4 py-6">
             <View
               className="h-[72px] w-[72px] items-center justify-center rounded-full"
@@ -338,232 +286,52 @@ export default function SettingsScreen() {
             </Text>
           </View>
 
-          {/* Dashboard Settings */}
-          <Text
-            className="mt-6 mb-2 ml-1 text-xs font-semibold uppercase"
-            style={{ color: theme.textSecondary }}
-          >
-            Dashboard
-          </Text>
-          <View
-            className="overflow-hidden rounded-xl border"
-            style={{ borderColor: theme.border }}
-          >
-            <SettingRow
-              icon="time-outline"
-              label={`Refresh: ${refreshIntervalMinutes} min`}
-              onPress={handleSetRefreshInterval}
-              theme={theme}
-            />
-            <View
-              className="h-px"
-              style={{ marginLeft: 48, backgroundColor: theme.border }}
-            />
-            <SettingRow
-              icon="notifications-outline"
-              label="Notifications"
-              theme={theme}
-              rightElement={
-                <Switch
-                  value={notificationsEnabled}
-                  onValueChange={toggleNotifications}
-                  trackColor={{
-                    false: theme.border,
-                    true: Colors.status.success,
-                  }}
-                  thumbColor={Colors.white}
-                />
-              }
-            />
-            <View
-              className="h-px"
-              style={{ marginLeft: 48, backgroundColor: theme.border }}
-            />
-            <SettingRow
-              icon="checkmark-circle-outline"
-              label="Test Notification"
-              onPress={handleTestNotification}
-              loading={isTestingNotification}
-              theme={theme}
-            />
-            {__DEV__ && (
-              <>
-                <View
-                  className="h-px"
-                  style={{ marginLeft: 48, backgroundColor: theme.border }}
-                />
-                <SettingRow
-                  icon="bug-outline"
-                  label="Dev Sync Alerts"
-                  theme={theme}
-                  rightElement={
-                    <Switch
-                      value={devDashboardSyncEnabled}
-                      onValueChange={setDevDashboardSyncEnabled}
-                      trackColor={{
-                        false: theme.border,
-                        true: Colors.status.info,
-                      }}
-                      thumbColor={Colors.white}
-                    />
-                  }
-                />
-              </>
-            )}
-          </View>
+          <DashboardSettingsSection
+            backgroundActivity={backgroundActivity}
+            backgroundSyncActivityEnabled={backgroundSyncActivityEnabled}
+            devDashboardSyncEnabled={devDashboardSyncEnabled}
+            isTestingNotification={isTestingNotification}
+            notificationsEnabled={notificationsEnabled}
+            onPressRefreshInterval={handleSetRefreshInterval}
+            onTestNotification={handleTestNotification}
+            onToggleBackgroundSyncActivity={toggleBackgroundSyncActivity}
+            onToggleDevDashboardSyncEnabled={setDevDashboardSyncEnabled}
+            onToggleNotifications={toggleNotifications}
+            refreshIntervalMinutes={refreshIntervalMinutes}
+            theme={theme}
+          />
 
-          {/* WiFix Settings */}
-          <Text
-            className="mt-6 mb-2 ml-1 text-xs font-semibold uppercase"
-            style={{ color: theme.textSecondary }}
-          >
-            WiFix
-          </Text>
-          <View
-            className="overflow-hidden rounded-xl border"
-            style={{ borderColor: theme.border }}
-          >
-            <SettingRow
-              icon="wifi"
-              label="Auto Reconnect"
-              theme={theme}
-              rightElement={
-                <Switch
-                  value={autoReconnectEnabled}
-                  onValueChange={(enabled) => {
-                    setAutoReconnectEnabled(enabled);
-                    syncWifixBackgroundTask();
-                  }}
-                  trackColor={{
-                    false: theme.border,
-                    true: Colors.status.info,
-                  }}
-                  thumbColor={Colors.white}
-                />
-              }
-            />
-            <View
-              className="h-px"
-              style={{ marginLeft: 48, backgroundColor: theme.border }}
-            />
-            <SettingRow
-              icon="time-outline"
-              label={`Background login: ${backgroundIntervalMinutes} min`}
-              onPress={handleSetWifixInterval}
-              theme={theme}
-            />
-          </View>
+          <WifixSettingsSection
+            autoReconnectEnabled={autoReconnectEnabled}
+            backgroundIntervalMinutes={backgroundIntervalMinutes}
+            onPressBackgroundInterval={handleSetWifixInterval}
+            onToggleAutoReconnect={(enabled) => {
+              setAutoReconnectEnabled(enabled);
+              syncWifixBackgroundTask();
+            }}
+            theme={theme}
+          />
 
-          {/* Custom Reminders */}
-          <Text
-            className="mt-6 mb-2 ml-1 text-xs font-semibold uppercase"
-            style={{ color: theme.textSecondary }}
-          >
-            Custom Reminders
-          </Text>
-          <View
-            className="overflow-hidden rounded-xl border"
-            style={{ borderColor: theme.border }}
-          >
-            {reminders.map((mins) => (
-              <View
-                key={mins}
-                className="flex-row items-center justify-between px-4 py-2"
-              >
-                <Text className="text-sm" style={{ color: theme.text }}>
-                  {mins} min before
-                </Text>
-                <Pressable onPress={() => removeReminder(mins)}>
-                  <Ionicons
-                    name="close-circle"
-                    size={20}
-                    color={Colors.status.danger}
-                  />
-                </Pressable>
-              </View>
-            ))}
-            <View className="flex-row items-center gap-2 p-4">
-              <TextInput
-                className="h-10 flex-1 rounded-lg border px-2 text-sm"
-                style={{ color: theme.text, borderColor: theme.border }}
-                placeholder="mins"
-                placeholderTextColor={theme.textSecondary}
-                value={newReminder}
-                onChangeText={setNewReminder}
-                keyboardType="numeric"
-              />
-              <Pressable
-                className="h-9 w-9 items-center justify-center rounded-lg"
-                style={{ backgroundColor: Colors.status.info }}
-                onPress={handleAddReminder}
-              >
-                <Ionicons name="add" size={20} color={Colors.white} />
-              </Pressable>
-            </View>
-          </View>
+          <CustomRemindersSection
+            newReminder={newReminder}
+            onAddReminder={handleAddReminder}
+            onChangeNewReminder={setNewReminder}
+            onRemoveReminder={removeReminder}
+            reminders={reminders}
+            theme={theme}
+          />
 
-          {/* General Settings */}
-          <Text
-            className="mt-6 mb-2 ml-1 text-xs font-semibold uppercase"
-            style={{ color: theme.textSecondary }}
-          >
-            General
-          </Text>
-          <View
-            className="overflow-hidden rounded-xl border"
-            style={{ borderColor: theme.border }}
-          >
-            <SettingRow
-              icon="color-palette-outline"
-              label={`Theme: ${themeLabelMap[themePreference]}`}
-              onPress={handleSetTheme}
-              theme={theme}
-            />
-            <View
-              className="h-px"
-              style={{ marginLeft: 48, backgroundColor: theme.border }}
-            />
-            <SettingRow
-              icon="cloud-download-outline"
-              label="Check for Updates"
-              onPress={handleCheckForUpdates}
-              loading={isCheckingUpdate}
-              theme={theme}
-            />
-            <View
-              className="h-px"
-              style={{ marginLeft: 48, backgroundColor: theme.border }}
-            />
-            <SettingRow
-              icon="trash-outline"
-              label="Clear Cache"
-              onPress={handleClearCache}
-              theme={theme}
-            />
-            <View
-              className="h-px"
-              style={{ marginLeft: 48, backgroundColor: theme.border }}
-            />
-            <SettingRow
-              icon="refresh-circle-outline"
-              label="Reset Bunks to LMS"
-              onPress={handleResetBunks}
-              theme={theme}
-            />
-            <View
-              className="h-px"
-              style={{ marginLeft: 48, backgroundColor: theme.border }}
-            />
-            <SettingRow
-              icon="log-out-outline"
-              label="Logout"
-              onPress={handleLogout}
-              danger
-              theme={theme}
-            />
-          </View>
+          <GeneralSettingsSection
+            isCheckingUpdate={isCheckingUpdate}
+            onCheckForUpdates={handleCheckForUpdates}
+            onClearCache={handleClearCache}
+            onLogout={handleLogout}
+            onResetBunks={handleResetBunks}
+            onSetTheme={handleSetTheme}
+            theme={theme}
+            themeLabel={themeLabelMap[themePreference]}
+          />
 
-          {/* Logs Section */}
           <Text
             className="mt-6 mb-2 ml-1 text-xs font-semibold uppercase"
             style={{ color: theme.textSecondary }}
@@ -572,68 +340,12 @@ export default function SettingsScreen() {
           </Text>
           <LogsSection logs={logs} onClear={clearLogs} />
 
-          {/* Footer */}
-          <View className="mt-8 items-center gap-1">
-            <Text className="text-xs" style={{ color: theme.textSecondary }}>
-              {showBuildVersion
-                ? `Bunkialo v${appVersion}(${buildVersion})`
-                : `Bunkialo v${appVersion}`}
-            </Text>
-            <View className="flex-row items-center">
-              <Text className="text-xs" style={{ color: theme.textSecondary }}>
-                Made by{" "}
-              </Text>
-              <Pressable
-                onPress={() =>
-                  Linking.openURL("https://www.linkedin.com/in/noel-georgi/")
-                }
-              >
-                <Text
-                  className="text-xs underline"
-                  style={{ color: theme.textSecondary }}
-                >
-                  Noel Georgi
-                </Text>
-              </Pressable>
-            </View>
-            <View className="flex-row items-center">
-              <Text className="text-xs" style={{ color: theme.textSecondary }}>
-                Ideas by{" "}
-              </Text>
-              <Pressable
-                onPress={() =>
-                  Linking.openURL(
-                    "https://www.linkedin.com/in/srimoneyshankar-ajith-a5a6831ba/",
-                  )
-                }
-              >
-                <Text
-                  className="text-xs underline"
-                  style={{ color: theme.textSecondary }}
-                >
-                  Srimoney
-                </Text>
-              </Pressable>
-              <Text className="text-xs" style={{ color: theme.textSecondary }}>
-                {" "}
-                &{" "}
-              </Text>
-              <Pressable
-                onPress={() =>
-                  Linking.openURL(
-                    "https://www.linkedin.com/in/niranjan-vasudevan/",
-                  )
-                }
-              >
-                <Text
-                  className="text-xs underline"
-                  style={{ color: theme.textSecondary }}
-                >
-                  Niranjan V
-                </Text>
-              </Pressable>
-            </View>
-          </View>
+          <SettingsFooter
+            appVersion={appVersion}
+            buildVersion={buildVersion}
+            showBuildVersion={showBuildVersion}
+            theme={theme}
+          />
         </View>
       </ScrollView>
 

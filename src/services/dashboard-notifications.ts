@@ -1,6 +1,7 @@
 import {
   DASHBOARD_NOTIFICATION_CHANNELS,
   DASHBOARD_NOTIFICATION_STORAGE_KEY,
+  LEGACY_DASHBOARD_NOTIFICATION_STORAGE_KEY,
 } from "@/constants/dashboard";
 import type { TimelineEvent } from "@/types";
 import {
@@ -11,12 +12,16 @@ import {
   sendImmediateNotification,
 } from "@/utils/notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  dedupeTimelineEvents,
+  getTimelineEventSignature,
+} from "./dashboard-event-utils";
 
 type DashboardSyncSource = "foreground" | "background";
 
 type DashboardNotificationState = {
   seenUpcomingSignatures: string[];
-  scheduledReminderIds: Record<string, string[]>;
+  scheduledReminderIds: Record<string, string>;
 };
 
 type SyncDashboardNotificationsParams = {
@@ -31,11 +36,54 @@ const EMPTY_NOTIFICATION_STATE: DashboardNotificationState = {
   scheduledReminderIds: {},
 };
 
-const getEventSignature = (event: TimelineEvent): string =>
-  `${event.id}:${event.timesort}`;
+let legacyMigrationPromise: Promise<void> | null = null;
+let notificationSyncQueue: Promise<void> = Promise.resolve();
+
+const getReminderSignature = (
+  event: TimelineEvent,
+  minutesBefore: number,
+): string => `${getTimelineEventSignature(event)}:${minutesBefore}`;
+
+const migrateLegacyDashboardNotificationState = async (): Promise<void> => {
+  const legacyRaw = await AsyncStorage.getItem(
+    LEGACY_DASHBOARD_NOTIFICATION_STORAGE_KEY,
+  );
+
+  if (!legacyRaw) {
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(legacyRaw) as {
+      scheduledReminderIds?: Record<string, string[]>;
+    };
+    const legacyNotificationIds = Object.values(
+      parsed.scheduledReminderIds ?? {},
+    ).flat();
+
+    if (legacyNotificationIds.length > 0) {
+      await cancelNotificationRequests(legacyNotificationIds);
+    }
+  } catch {
+    // Ignore malformed legacy state and fall through to removing it.
+  } finally {
+    await AsyncStorage.removeItem(LEGACY_DASHBOARD_NOTIFICATION_STORAGE_KEY);
+  }
+};
+
+const ensureLegacyDashboardNotificationStateMigrated =
+  async (): Promise<void> => {
+    if (!legacyMigrationPromise) {
+      legacyMigrationPromise = migrateLegacyDashboardNotificationState();
+    }
+
+    await legacyMigrationPromise;
+  };
 
 const loadDashboardNotificationState =
   async (): Promise<DashboardNotificationState> => {
+    await ensureLegacyDashboardNotificationStateMigrated();
+
     const raw = await AsyncStorage.getItem(DASHBOARD_NOTIFICATION_STORAGE_KEY);
     if (!raw) {
       return EMPTY_NOTIFICATION_STATE;
@@ -92,19 +140,48 @@ const buildNewUpcomingNotification = (
   };
 };
 
-const scheduleReminderNotifications = async (
+const isFutureReminder = (
+  event: TimelineEvent,
+  minutesBefore: number,
+): boolean => {
+  const scheduledAt = event.timesort * 1000 - minutesBefore * 60 * 1000;
+  return scheduledAt > Date.now();
+};
+
+const cancelReminderMap = async (
+  reminderMap: Record<string, string>,
+): Promise<void> => {
+  const reminderIds = Object.values(reminderMap);
+  if (reminderIds.length === 0) {
+    return;
+  }
+
+  await cancelNotificationRequests(reminderIds);
+};
+
+const buildReminderNotifications = async (
+  previousReminderIds: Record<string, string>,
   upcomingEvents: TimelineEvent[],
   reminderMinutes: number[],
-): Promise<Record<string, string[]>> => {
-  const scheduledReminderIds: Record<string, string[]> = {};
+): Promise<Record<string, string>> => {
+  const scheduledReminderIds: Record<string, string> = {};
+  const uniqueReminderMinutes = Array.from(
+    new Set(reminderMinutes.filter((minutes) => minutes > 0)),
+  ).sort((a, b) => b - a);
 
   for (const event of upcomingEvents) {
-    const signature = getEventSignature(event);
-    const notificationIds: string[] = [];
+    for (const minutesBefore of uniqueReminderMinutes) {
+      if (!isFutureReminder(event, minutesBefore)) {
+        continue;
+      }
 
-    for (const minutesBefore of reminderMinutes) {
       const scheduledAt = event.timesort * 1000 - minutesBefore * 60 * 1000;
-      if (scheduledAt <= Date.now()) {
+
+      const reminderSignature = getReminderSignature(event, minutesBefore);
+      const existingNotificationId = previousReminderIds[reminderSignature];
+
+      if (existingNotificationId) {
+        scheduledReminderIds[reminderSignature] = existingNotificationId;
         continue;
       }
 
@@ -121,11 +198,7 @@ const scheduleReminderNotifications = async (
         title: event.activityname,
       });
 
-      notificationIds.push(notificationId);
-    }
-
-    if (notificationIds.length > 0) {
-      scheduledReminderIds[signature] = notificationIds;
+      scheduledReminderIds[reminderSignature] = notificationId;
     }
   }
 
@@ -133,17 +206,14 @@ const scheduleReminderNotifications = async (
 };
 
 export const clearDashboardNotificationState = async (): Promise<void> => {
+  await ensureLegacyDashboardNotificationStateMigrated();
   const state = await loadDashboardNotificationState();
-  const notificationIds = Object.values(state.scheduledReminderIds).flat();
-
-  if (notificationIds.length > 0) {
-    await cancelNotificationRequests(notificationIds);
-  }
+  await cancelReminderMap(state.scheduledReminderIds);
 
   await AsyncStorage.removeItem(DASHBOARD_NOTIFICATION_STORAGE_KEY);
 };
 
-export const syncDashboardNotifications = async ({
+const runDashboardNotificationsSync = async ({
   notificationsEnabled,
   reminderMinutes,
   source,
@@ -151,22 +221,17 @@ export const syncDashboardNotifications = async ({
 }: SyncDashboardNotificationsParams): Promise<{
   newUpcomingEvents: TimelineEvent[];
 }> => {
+  const dedupedUpcomingEvents = dedupeTimelineEvents(upcomingEvents);
   const previousState = await loadDashboardNotificationState();
   const previousSignatures = new Set(previousState.seenUpcomingSignatures);
-  const currentSignatures = new Set(upcomingEvents.map(getEventSignature));
+  const currentSignatures = new Set(
+    dedupedUpcomingEvents.map(getTimelineEventSignature),
+  );
   const hasSeenBaseline = previousState.seenUpcomingSignatures.length > 0;
 
-  const staleReminderIds = Object.entries(previousState.scheduledReminderIds)
-    .filter(([signature]) => !currentSignatures.has(signature))
-    .flatMap(([, ids]) => ids);
-
-  if (staleReminderIds.length > 0) {
-    await cancelNotificationRequests(staleReminderIds);
-  }
-
   const newUpcomingEvents = hasSeenBaseline
-    ? upcomingEvents.filter(
-        (event) => !previousSignatures.has(getEventSignature(event)),
+    ? dedupedUpcomingEvents.filter(
+        (event) => !previousSignatures.has(getTimelineEventSignature(event)),
       )
     : [];
 
@@ -174,12 +239,7 @@ export const syncDashboardNotifications = async ({
     notificationsEnabled && (await hasNotificationPermissions());
 
   if (!shouldSendNotifications) {
-    const existingReminderIds = Object.values(
-      previousState.scheduledReminderIds,
-    ).flat();
-    if (existingReminderIds.length > 0) {
-      await cancelNotificationRequests(existingReminderIds);
-    }
+    await cancelReminderMap(previousState.scheduledReminderIds);
 
     await saveDashboardNotificationState({
       seenUpcomingSignatures: Array.from(currentSignatures),
@@ -204,15 +264,24 @@ export const syncDashboardNotifications = async ({
     },
   ]);
 
-  const currentReminderIds = Object.values(
-    previousState.scheduledReminderIds,
-  ).flat();
-  if (currentReminderIds.length > 0) {
-    await cancelNotificationRequests(currentReminderIds);
+  const nextReminderKeys = new Set(
+    dedupedUpcomingEvents.flatMap((event) =>
+      reminderMinutes
+        .filter((minutes) => minutes > 0 && isFutureReminder(event, minutes))
+        .map((minutesBefore) => getReminderSignature(event, minutesBefore)),
+    ),
+  );
+  const staleReminderIds = Object.entries(previousState.scheduledReminderIds)
+    .filter(([reminderSignature]) => !nextReminderKeys.has(reminderSignature))
+    .map(([, notificationId]) => notificationId);
+
+  if (staleReminderIds.length > 0) {
+    await cancelNotificationRequests(staleReminderIds);
   }
 
-  const scheduledReminderIds = await scheduleReminderNotifications(
-    upcomingEvents,
+  const scheduledReminderIds = await buildReminderNotifications(
+    previousState.scheduledReminderIds,
+    dedupedUpcomingEvents,
     reminderMinutes,
   );
 
@@ -238,4 +307,24 @@ export const syncDashboardNotifications = async ({
   });
 
   return { newUpcomingEvents };
+};
+
+export const syncDashboardNotifications = async (
+  params: SyncDashboardNotificationsParams,
+): Promise<{
+  newUpcomingEvents: TimelineEvent[];
+}> => {
+  let releaseQueue!: () => void;
+  const waitForTurn = notificationSyncQueue;
+  notificationSyncQueue = new Promise<void>((resolve) => {
+    releaseQueue = resolve;
+  });
+
+  await waitForTurn;
+
+  try {
+    return await runDashboardNotificationsSync(params);
+  } finally {
+    releaseQueue();
+  }
 };

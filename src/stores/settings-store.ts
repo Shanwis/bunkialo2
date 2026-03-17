@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 interface SettingsState extends DashboardSettings {
+  toggleBackgroundSyncActivity: (enabled: boolean) => void;
   themePreference: ThemePreference;
   setRefreshInterval: (minutes: number) => void;
   addReminder: (minutes: number) => void;
@@ -17,6 +18,7 @@ interface SettingsState extends DashboardSettings {
 const DEFAULT_SETTINGS: DashboardSettings & {
   themePreference: ThemePreference;
 } = {
+  backgroundSyncActivityEnabled: false,
   refreshIntervalMinutes: 30,
   reminders: [30, 10],
   notificationsEnabled: true,
@@ -30,6 +32,9 @@ export const useSettingsStore = create<SettingsState>()(
       ...DEFAULT_SETTINGS,
 
       setRefreshInterval: (minutes) => set({ refreshIntervalMinutes: minutes }),
+
+      toggleBackgroundSyncActivity: (enabled) =>
+        set({ backgroundSyncActivityEnabled: enabled }),
 
       addReminder: (minutes) =>
         set((state) => {

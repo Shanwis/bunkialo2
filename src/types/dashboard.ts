@@ -39,7 +39,26 @@ export interface DashboardLog {
   type: "info" | "error" | "success";
 }
 
+export type DashboardBackgroundTaskAvailability =
+  | "unknown"
+  | "available"
+  | "restricted";
+
+export type DashboardBackgroundTaskResult = "idle" | "success" | "failed";
+
+export interface DashboardBackgroundActivity {
+  availability: DashboardBackgroundTaskAvailability;
+  isRegistered: boolean;
+  lastAttemptAt: number | null;
+  lastCompletedAt: number | null;
+  lastError: string | null;
+  lastOverdueCount: number | null;
+  lastResult: DashboardBackgroundTaskResult;
+  lastUpcomingCount: number | null;
+}
+
 export interface DashboardState {
+  backgroundActivity: DashboardBackgroundActivity;
   events: TimelineEvent[];
   lastSyncTime: number | null;
   isLoading: boolean;
@@ -48,6 +67,7 @@ export interface DashboardState {
 }
 
 export interface DashboardSettings {
+  backgroundSyncActivityEnabled: boolean;
   refreshIntervalMinutes: number;
   reminders: number[];
   notificationsEnabled: boolean;

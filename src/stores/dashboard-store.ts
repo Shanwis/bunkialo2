@@ -1,6 +1,11 @@
 import type { DashboardSyncSource } from "@/services/dashboard-sync";
 import { runDashboardSync } from "@/services/dashboard-sync";
-import type { DashboardLog, DashboardState, TimelineEvent } from "@/types";
+import type {
+  DashboardBackgroundActivity,
+  DashboardLog,
+  DashboardState,
+  TimelineEvent,
+} from "@/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -28,15 +33,30 @@ interface DashboardStore extends DashboardState {
   addLog: (message: string, type: DashboardLog["type"]) => void;
   clearLogs: () => void;
   clearDashboard: () => void;
+  setBackgroundActivity: (
+    activity: Partial<DashboardBackgroundActivity>,
+  ) => void;
   setHasHydrated: (hasHydrated: boolean) => void;
 }
 
 const generateLogId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+const DEFAULT_BACKGROUND_ACTIVITY: DashboardBackgroundActivity = {
+  availability: "unknown",
+  isRegistered: false,
+  lastAttemptAt: null,
+  lastCompletedAt: null,
+  lastError: null,
+  lastOverdueCount: null,
+  lastResult: "idle",
+  lastUpcomingCount: null,
+};
+
 export const useDashboardStore = create<DashboardStore>()(
   persist(
     (set, get) => ({
+      backgroundActivity: DEFAULT_BACKGROUND_ACTIVITY,
       events: [],
       upcomingEvents: [],
       overdueEvents: [],
@@ -47,6 +67,14 @@ export const useDashboardStore = create<DashboardStore>()(
       hasHydrated: false,
 
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+
+      setBackgroundActivity: (activity) =>
+        set((state) => ({
+          backgroundActivity: {
+            ...state.backgroundActivity,
+            ...activity,
+          },
+        })),
 
       fetchDashboard: async (options) => {
         const silent = options?.silent ?? false;
@@ -59,9 +87,13 @@ export const useDashboardStore = create<DashboardStore>()(
         }
 
         const addLog = get().addLog;
+        const syncLabel =
+          source === "background"
+            ? "background dashboard sync"
+            : "dashboard sync";
 
         try {
-          addLog("Starting dashboard sync...", "info");
+          addLog(`Starting ${syncLabel}...`, "info");
 
           const { upcoming, overdue, newUpcomingEvents, syncedAt } =
             await runDashboardSync({ source });
@@ -75,7 +107,7 @@ export const useDashboardStore = create<DashboardStore>()(
           }));
 
           addLog(
-            `Synced ${upcoming.length} upcoming, ${overdue.length} overdue`,
+            `Synced ${upcoming.length} upcoming, ${overdue.length} overdue (${source})`,
             "success",
           );
 
@@ -132,6 +164,7 @@ export const useDashboardStore = create<DashboardStore>()(
           lastSyncTime: null,
           error: null,
           isLoading: false,
+          backgroundActivity: DEFAULT_BACKGROUND_ACTIVITY,
         }),
     }),
     {
@@ -142,6 +175,7 @@ export const useDashboardStore = create<DashboardStore>()(
         upcomingEvents: state.upcomingEvents,
         overdueEvents: state.overdueEvents,
         lastSyncTime: state.lastSyncTime,
+        backgroundActivity: state.backgroundActivity,
         logs: state.logs,
       }),
       onRehydrateStorage: () => (state) => {
