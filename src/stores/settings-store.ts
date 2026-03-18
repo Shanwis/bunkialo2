@@ -13,6 +13,8 @@ interface SettingsState extends DashboardSettings {
   setDevDashboardSyncEnabled: (enabled: boolean) => void;
   setThemePreference: (preference: ThemePreference) => void;
   toggleTheme: () => void;
+  devModeEnabled: boolean;
+  setDevModeEnabled: (enabled: boolean) => void;
 }
 
 const DEFAULT_SETTINGS: DashboardSettings & {
@@ -24,6 +26,7 @@ const DEFAULT_SETTINGS: DashboardSettings & {
   notificationsEnabled: true,
   devDashboardSyncEnabled: false,
   themePreference: "system",
+  devModeEnabled: false,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -54,6 +57,8 @@ export const useSettingsStore = create<SettingsState>()(
         set({ devDashboardSyncEnabled: enabled }),
 
       setThemePreference: (preference) => set({ themePreference: preference }),
+
+      setDevModeEnabled: (enabled) => set({ devModeEnabled: enabled }),
 
       toggleTheme: () =>
         set((state) => {

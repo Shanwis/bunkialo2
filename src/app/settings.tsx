@@ -6,12 +6,15 @@ import {
   GeneralSettingsSection,
   SettingsFooter,
   WifixSettingsSection,
+  SettingRow,
+  BackgroundSyncStatusCard,
 } from "@/components/settings";
 import { ConfirmModal } from "@/components/modals/confirm-modal";
 import { SelectionModal } from "@/components/modals/selection-modal";
 import { LogsSection } from "@/components/shared/logs-section";
 import { Container } from "@/components/ui/container";
 import { Colors } from "@/constants/theme";
+import { Switch } from "react-native";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAttendanceStore } from "@/stores/attendance-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -26,8 +29,8 @@ import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import * as Updates from "expo-updates";
-import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useState, useRef } from "react";
+import { Animated, LayoutAnimation, Pressable, ScrollView, Text, View } from "react-native";
 import type { ThemePreference } from "@/types";
 
 export default function SettingsScreen() {
@@ -53,6 +56,8 @@ export default function SettingsScreen() {
     setDevDashboardSyncEnabled,
     themePreference,
     setThemePreference,
+    devModeEnabled,
+    setDevModeEnabled,
   } = useSettingsStore();
   const {
     backgroundIntervalMinutes,
@@ -132,6 +137,13 @@ export default function SettingsScreen() {
 
   const handleSetTheme = () => {
     setShowThemeModal(true);
+  };
+
+  const [isDevExpanded, setIsDevExpanded] = useState(false);
+
+  const toggleDevMode = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsDevExpanded(!isDevExpanded);
   };
 
   const themeLabelMap: Record<ThemePreference, string> = {
@@ -294,21 +306,8 @@ export default function SettingsScreen() {
             notificationsEnabled={notificationsEnabled}
             onPressRefreshInterval={handleSetRefreshInterval}
             onTestNotification={handleTestNotification}
-            onToggleBackgroundSyncActivity={toggleBackgroundSyncActivity}
-            onToggleDevDashboardSyncEnabled={setDevDashboardSyncEnabled}
             onToggleNotifications={toggleNotifications}
             refreshIntervalMinutes={refreshIntervalMinutes}
-            theme={theme}
-          />
-
-          <WifixSettingsSection
-            autoReconnectEnabled={autoReconnectEnabled}
-            backgroundIntervalMinutes={backgroundIntervalMinutes}
-            onPressBackgroundInterval={handleSetWifixInterval}
-            onToggleAutoReconnect={(enabled) => {
-              setAutoReconnectEnabled(enabled);
-              syncWifixBackgroundTask();
-            }}
             theme={theme}
           />
 
@@ -332,13 +331,89 @@ export default function SettingsScreen() {
             themeLabel={themeLabelMap[themePreference]}
           />
 
-          <Text
-            className="mt-6 mb-2 ml-1 text-xs font-semibold uppercase"
-            style={{ color: theme.textSecondary }}
+          <Pressable
+            onPress={toggleDevMode}
+            className="mt-6 mb-2 ml-1 flex-row items-center gap-1"
           >
-            Logs
-          </Text>
-          <LogsSection logs={logs} onClear={clearLogs} />
+            <Ionicons 
+              name={isDevExpanded ? "chevron-down" : "chevron-forward"} 
+              size={14} 
+              color={theme.textSecondary} 
+            />
+            <Text
+              className="text-xs font-semibold uppercase"
+              style={{ color: theme.textSecondary }}
+            >
+              Developer
+            </Text>
+          </Pressable>
+          
+          {isDevExpanded && (
+            <>
+              <View
+                className="overflow-hidden rounded-xl border mb-3"
+                style={{ borderColor: theme.border }}
+              >
+                <SettingRow
+                  icon="pulse-outline"
+                  label="Sync Activity Alerts"
+                  theme={theme}
+                  rightElement={
+                    <Switch
+                      value={backgroundSyncActivityEnabled}
+                      onValueChange={toggleBackgroundSyncActivity}
+                      trackColor={{
+                        false: theme.border,
+                        true: Colors.status.info,
+                      }}
+                      thumbColor={Colors.white}
+                    />
+                  }
+                />
+                <View
+                  className="h-px"
+                  style={{ marginLeft: 48, backgroundColor: theme.border }}
+                />
+                <SettingRow
+                  icon="bug-outline"
+                  label="Verbose Dev Alerts"
+                  theme={theme}
+                  rightElement={
+                    <Switch
+                      value={devDashboardSyncEnabled}
+                      onValueChange={setDevDashboardSyncEnabled}
+                      trackColor={{
+                        false: theme.border,
+                        true: Colors.status.info,
+                      }}
+                      thumbColor={Colors.white}
+                    />
+                  }
+                />
+              </View>
+
+              <BackgroundSyncStatusCard activity={backgroundActivity} theme={theme} />
+
+              <WifixSettingsSection
+                autoReconnectEnabled={autoReconnectEnabled}
+                backgroundIntervalMinutes={backgroundIntervalMinutes}
+                onPressBackgroundInterval={handleSetWifixInterval}
+                onToggleAutoReconnect={(enabled) => {
+                  setAutoReconnectEnabled(enabled);
+                  syncWifixBackgroundTask();
+                }}
+                theme={theme}
+              />
+              
+              <Text
+                className="mt-6 mb-2 ml-1 text-xs font-semibold uppercase"
+                style={{ color: theme.textSecondary }}
+              >
+                Logs
+              </Text>
+              <LogsSection logs={logs} onClear={clearLogs} />
+            </>
+          )}
 
           <SettingsFooter
             appVersion={appVersion}

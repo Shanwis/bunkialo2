@@ -72,4 +72,5 @@ export interface DashboardSettings {
   reminders: number[];
   notificationsEnabled: boolean;
   devDashboardSyncEnabled: boolean;
+  devModeEnabled: boolean;
 }
