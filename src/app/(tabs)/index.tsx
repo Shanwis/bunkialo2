@@ -74,7 +74,7 @@ export default function DashboardScreen() {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showDevInfo, setShowDevInfo] = useState(false);
   const [showNoticesModal, setShowNoticesModal] = useState(false);
-  const { hasUnseenPopups } = usePopupStore();
+  const { hasUnseenPopups, markAllAsSeen } = usePopupStore();
   const isFocused = useIsFocused();
   const hasAutoRefreshed = useRef(false);
   const hasCompletedInitialRefresh = useRef(false);
@@ -410,7 +410,10 @@ export default function DashboardScreen() {
               />
             </Pressable>
             <Pressable
-              onPress={() => setShowNoticesModal(true)}
+              onPress={() => {
+                markAllAsSeen();
+                setShowNoticesModal(true);
+              }}
               className="p-2 relative"
             >
               <Ionicons
