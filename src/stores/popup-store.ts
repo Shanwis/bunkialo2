@@ -3,21 +3,69 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { zustandStorage } from "./storage";
 import { POPUP_NOTICES } from "@/data/popups";
 
+const VALID_POPUP_IDS = new Set(POPUP_NOTICES.map((popup) => popup.id));
+
+const normalizeSeenPopupIds = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+
+  const seenPopupIds = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string" || !VALID_POPUP_IDS.has(item)) continue;
+    seenPopupIds.add(item);
+  }
+
+  return Array.from(seenPopupIds);
+};
+
+const extractSeenPopupIds = (value: unknown): string[] | null => {
+  if (Array.isArray(value)) {
+    return normalizeSeenPopupIds(value);
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as {
+    seenPopupIds?: unknown;
+    state?: {
+      seenPopupIds?: unknown;
+    };
+  };
+
+  if ("seenPopupIds" in candidate) {
+    return normalizeSeenPopupIds(candidate.seenPopupIds);
+  }
+
+  if (candidate.state && "seenPopupIds" in candidate.state) {
+    return normalizeSeenPopupIds(candidate.state.seenPopupIds);
+  }
+
+  return null;
+};
+
 interface PopupState {
   seenPopupIds: string[];
+  hasHydrated: boolean;
   markAsSeen: (id: string) => void;
   markAllAsSeen: () => void;
   clearSeenPopups: () => void;
   hasUnseenPopups: () => boolean;
   getUnseenPopups: () => typeof POPUP_NOTICES;
+  setHasHydrated: (hasHydrated: boolean) => void;
 }
 
 export const usePopupStore = create<PopupState>()(
   persist(
     (set, get) => ({
       seenPopupIds: [],
+      hasHydrated: false,
+
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       markAsSeen: (id: string) => {
+        if (!VALID_POPUP_IDS.has(id)) return;
+
         set((state) => {
           if (state.seenPopupIds.includes(id)) {
             return state;
@@ -30,7 +78,7 @@ export const usePopupStore = create<PopupState>()(
 
       markAllAsSeen: () => {
         set({
-          seenPopupIds: POPUP_NOTICES.map((p) => p.id),
+          seenPopupIds: Array.from(VALID_POPUP_IDS),
         });
       },
 
@@ -39,12 +87,14 @@ export const usePopupStore = create<PopupState>()(
       },
 
       hasUnseenPopups: () => {
-        const { seenPopupIds } = get();
+        const { hasHydrated, seenPopupIds } = get();
+        if (!hasHydrated) return false;
         return POPUP_NOTICES.some((popup) => !seenPopupIds.includes(popup.id));
       },
 
       getUnseenPopups: () => {
-        const { seenPopupIds } = get();
+        const { hasHydrated, seenPopupIds } = get();
+        if (!hasHydrated) return [];
         return POPUP_NOTICES.filter((popup) => !seenPopupIds.includes(popup.id));
       },
     }),
@@ -56,13 +106,15 @@ export const usePopupStore = create<PopupState>()(
           if (!value) return null;
           try {
             const parsed = JSON.parse(value);
-            // Legacy support: if it's an array, it's from the old non-Zustand storage
-            if (Array.isArray(parsed)) {
+
+            const seenPopupIds = extractSeenPopupIds(parsed);
+            if (seenPopupIds !== null) {
               return JSON.stringify({
-                state: { seenPopupIds: parsed },
+                state: { seenPopupIds },
                 version: 0,
               });
             }
+
             return value;
           } catch {
             return value;
@@ -72,6 +124,9 @@ export const usePopupStore = create<PopupState>()(
         removeItem: (name) => zustandStorage.removeItem(name),
       })),
       partialize: (state) => ({ seenPopupIds: state.seenPopupIds }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

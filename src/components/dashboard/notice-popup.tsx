@@ -3,13 +3,16 @@ import { Animated, Modal, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { POPUP_NOTICES } from "@/data/popups";
 import { usePopupStore } from "@/stores/popup-store";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { PopupNotice } from "@/types";
 
 export function NoticePopup() {
-  const { getUnseenPopups, markAsSeen } = usePopupStore();
+  const hasHydrated = usePopupStore((state) => state.hasHydrated);
+  const seenPopupIds = usePopupStore((state) => state.seenPopupIds);
+  const markAsSeen = usePopupStore((state) => state.markAsSeen);
   const [currentPopup, setCurrentPopup] = useState<PopupNotice | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -58,8 +61,11 @@ export function NoticePopup() {
 
   // pick the next unseen popup
   useEffect(() => {
-    if (modalVisible) return;
-    const unseen = getUnseenPopups();
+    if (!hasHydrated || modalVisible) return;
+
+    const unseen = POPUP_NOTICES.filter(
+      (popup) => !seenPopupIds.includes(popup.id),
+    );
     if (unseen.length === 0) return;
 
     const sorted = [...unseen].sort((a, b) => {
@@ -73,14 +79,14 @@ export function NoticePopup() {
     slideAnim.setValue(300);
     setCurrentPopup(sorted[0]);
     setModalVisible(true);
-  }, [modalVisible, getUnseenPopups, backdropOpacity, slideAnim]);
+  }, [hasHydrated, modalVisible, seenPopupIds, backdropOpacity, slideAnim]);
 
   // trigger enter animation once modal is up
   useEffect(() => {
     if (modalVisible && currentPopup) animateIn();
   }, [modalVisible, currentPopup, animateIn]);
 
-  if (!currentPopup || !modalVisible) return null;
+  if (!hasHydrated || !currentPopup || !modalVisible) return null;
 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent>
@@ -162,4 +168,3 @@ export function NoticePopup() {
     </Modal>
   );
 }
-

@@ -6,6 +6,7 @@ import { NoticePopup } from "@/components/dashboard/notice-popup";
 import { NoticesModal } from "@/components/dashboard/notices-modal";
 import { DevInfoModal } from "@/components/modals/dev-info-modal";
 import { Container } from "@/components/ui/container";
+import { POPUP_NOTICES } from "@/data/popups";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/stores/auth-store";
@@ -74,7 +75,12 @@ export default function DashboardScreen() {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showDevInfo, setShowDevInfo] = useState(false);
   const [showNoticesModal, setShowNoticesModal] = useState(false);
-  const { hasUnseenPopups, markAllAsSeen } = usePopupStore();
+  const hasUnseenPopups = usePopupStore(
+    (state) =>
+      state.hasHydrated &&
+      POPUP_NOTICES.some((popup) => !state.seenPopupIds.includes(popup.id)),
+  );
+  const markAllAsSeen = usePopupStore((state) => state.markAllAsSeen);
   const isFocused = useIsFocused();
   const hasAutoRefreshed = useRef(false);
   const hasCompletedInitialRefresh = useRef(false);
@@ -421,7 +427,7 @@ export default function DashboardScreen() {
                 size={20}
                 color={theme.textSecondary}
               />
-              {hasUnseenPopups() && (
+              {hasUnseenPopups && (
                 <View className="absolute right-2 top-2 h-2 w-2 rounded-full" style={{ backgroundColor: Colors.status.danger }} />
               )}
             </Pressable>
