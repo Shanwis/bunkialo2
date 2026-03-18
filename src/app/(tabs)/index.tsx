@@ -2,6 +2,8 @@ import { startBackgroundRefresh } from "@/background/dashboard-background";
 import { EventCard } from "@/components/dashboard/event-card";
 import { TimelineSection } from "@/components/dashboard/timeline-section";
 import { UpNextSection } from "@/components/dashboard/up-next-section";
+import { NoticePopup } from "@/components/dashboard/notice-popup";
+import { NoticesModal } from "@/components/dashboard/notices-modal";
 import { DevInfoModal } from "@/components/modals/dev-info-modal";
 import { Container } from "@/components/ui/container";
 import { Colors } from "@/constants/theme";
@@ -11,6 +13,7 @@ import { useAttendanceStore } from "@/stores/attendance-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { useLmsResourcesStore } from "@/stores/lms-resources-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { usePopupStore } from "@/stores/popup-store";
 import { scheduleIdleTask } from "@/utils/scheduling";
 import { initializeNotifications } from "@/utils/notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -70,6 +73,8 @@ export default function DashboardScreen() {
   const [showOverdue, setShowOverdue] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showDevInfo, setShowDevInfo] = useState(false);
+  const [showNoticesModal, setShowNoticesModal] = useState(false);
+  const { hasUnseenPopups } = usePopupStore();
   const isFocused = useIsFocused();
   const hasAutoRefreshed = useRef(false);
   const hasCompletedInitialRefresh = useRef(false);
@@ -405,6 +410,19 @@ export default function DashboardScreen() {
               />
             </Pressable>
             <Pressable
+              onPress={() => setShowNoticesModal(true)}
+              className="p-2 relative"
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color={theme.textSecondary}
+              />
+              {hasUnseenPopups() && (
+                <View className="absolute right-2 top-2 h-2 w-2 rounded-full" style={{ backgroundColor: Colors.status.danger }} />
+              )}
+            </Pressable>
+            <Pressable
               onPress={() => setShowDevInfo(true)}
               className="p-2"
             >
@@ -515,6 +533,12 @@ export default function DashboardScreen() {
         visible={showDevInfo}
         onClose={() => setShowDevInfo(false)}
       />
+
+      <NoticesModal 
+        visible={showNoticesModal} 
+        onClose={() => setShowNoticesModal(false)} 
+      />
+      <NoticePopup />
     </Container>
   );
 }
