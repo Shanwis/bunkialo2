@@ -51,6 +51,7 @@ export const usePopupStore = create<PopupState>()(
     {
       name: "bunkialo-popup-storage",
       storage: createJSONStorage(() => zustandStorage),
+      partialize: (state) => ({ seenPopupIds: state.seenPopupIds }),
     }
   )
 );
