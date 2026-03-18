@@ -50,7 +50,27 @@ export const usePopupStore = create<PopupState>()(
     }),
     {
       name: "bunkialo-popup-storage",
-      storage: createJSONStorage(() => zustandStorage),
+      storage: createJSONStorage(() => ({
+        getItem: async (name) => {
+          const value = await zustandStorage.getItem(name);
+          if (!value) return null;
+          try {
+            const parsed = JSON.parse(value);
+            // Legacy support: if it's an array, it's from the old non-Zustand storage
+            if (Array.isArray(parsed)) {
+              return JSON.stringify({
+                state: { seenPopupIds: parsed },
+                version: 0,
+              });
+            }
+            return value;
+          } catch {
+            return value;
+          }
+        },
+        setItem: (name, value) => zustandStorage.setItem(name, value),
+        removeItem: (name) => zustandStorage.removeItem(name),
+      })),
       partialize: (state) => ({ seenPopupIds: state.seenPopupIds }),
     }
   )
