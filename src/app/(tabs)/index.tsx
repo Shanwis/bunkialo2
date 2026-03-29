@@ -285,6 +285,18 @@ export default function DashboardScreen() {
         router.push("/gpa");
       },
     },
+    {
+      icon: "open-in-new",
+      label: "Bunkx",
+      color: theme.text,
+      style: { backgroundColor: theme.backgroundSecondary },
+      labelStyle: actionLabelStyle,
+      containerStyle: actionContainerStyle,
+      onPress: () => {
+        setShowFabMenu(false);
+        Linking.openURL("https://bunkx-iiitk.vercel.app");
+      },
+    },
     ...(isOldBatch
       ? [
         {
