@@ -1,9 +1,9 @@
-import { extractCourseCode, extractCourseName } from "@/utils/course-name";
 import type {
-  BunkxAttendancePayload,
-  BunkxAttendanceRow,
-  CourseAttendance,
+    BunkxAttendancePayload,
+    BunkxAttendanceRow,
+    CourseAttendance,
 } from "@/types";
+import { extractCourseCode, extractCourseName } from "@/utils/course-name";
 
 const MONTHS: Record<string, number> = {
   jan: 0,
@@ -77,7 +77,10 @@ const parseFacultyDetails = (
   const facultyFromLabel = facultyLabelMatch?.[1]?.trim();
 
   const facultyFromEmail = faculty_email
-    ? faculty_email.split("@")[0].replace(/[._-]+/g, " ").trim()
+    ? faculty_email
+        .split("@")[0]
+        .replace(/[._-]+/g, " ")
+        .trim()
     : "";
 
   return {
@@ -136,7 +139,7 @@ export const buildBunkxAttendancePayload = (
   lastSyncTime: number | null,
 ): BunkxAttendancePayload => {
   const nowMs = Date.now();
-  const referenceMs = lastSyncTime ?? nowMs;
+  const referenceMs = Math.max(nowMs, lastSyncTime ?? nowMs);
   const expiresAtMs = referenceMs + 30 * 60 * 1000;
 
   return {
@@ -153,9 +156,7 @@ const encodeBytesToBase64 = (bytes: number[]): string => {
 
   for (let i = 0; i < bytes.length; i += 3) {
     const chunk =
-      (bytes[i] << 16) |
-      ((bytes[i + 1] ?? 0) << 8) |
-      (bytes[i + 2] ?? 0);
+      (bytes[i] << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
 
     encoded += base64Chars[(chunk >> 18) & 63];
     encoded += base64Chars[(chunk >> 12) & 63];
