@@ -6,6 +6,7 @@ import { NoticePopup } from "@/components/dashboard/notice-popup";
 import { NoticesModal } from "@/components/dashboard/notices-modal";
 import { DevInfoModal } from "@/components/modals/dev-info-modal";
 import { Container } from "@/components/ui/container";
+import { Toast } from "@/components";
 import { POPUP_NOTICES } from "@/data/popups";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -244,16 +245,24 @@ export default function DashboardScreen() {
     setShowFabMenu(false);
 
     void (async () => {
-      const credentials = await getCredentials();
-      const credentialUsername = credentials?.username ?? username;
-      const credentialPassword = credentials?.password;
+      try {
+        const credentials = await getCredentials();
+        const credentialUsername = credentials?.username ?? username;
+        const credentialPassword = credentials?.password;
 
-      const launchUrl =
-        credentialUsername && credentialPassword
-          ? `https://${encodeURIComponent(credentialUsername)}:${encodeURIComponent(credentialPassword)}@bunkx-iiitk.vercel.app`
-          : "https://bunkx-iiitk.vercel.app";
+        const launchUrl =
+          credentialUsername && credentialPassword
+            ? `https://${encodeURIComponent(credentialUsername)}:${encodeURIComponent(credentialPassword)}@bunkx-iiitk.vercel.app`
+            : "https://bunkx-iiitk.vercel.app";
 
-      await Linking.openURL(launchUrl);
+        await Linking.openURL(launchUrl);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error && error.message
+            ? ` (${error.message})`
+            : "";
+        Toast.show(`Could not open Bunkx${errorMessage}`, { type: "error" });
+      }
     })();
   }, [username]);
 
