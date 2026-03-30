@@ -9,6 +9,7 @@ import { Container } from "@/components/ui/container";
 import { POPUP_NOTICES } from "@/data/popups";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { getCredentials } from "@/services/auth";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAttendanceStore } from "@/stores/attendance-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
@@ -239,6 +240,23 @@ export default function DashboardScreen() {
     })();
   }, [fetchDashboard, queueInvisibleAttendanceRefresh]);
 
+  const handleOpenBunkx = useCallback(() => {
+    setShowFabMenu(false);
+
+    void (async () => {
+      const credentials = await getCredentials();
+      const credentialUsername = credentials?.username ?? username;
+      const credentialPassword = credentials?.password;
+
+      const launchUrl =
+        credentialUsername && credentialPassword
+          ? `https://${encodeURIComponent(credentialUsername)}:${encodeURIComponent(credentialPassword)}@bunkx-iiitk.vercel.app`
+          : "https://bunkx-iiitk.vercel.app";
+
+      await Linking.openURL(launchUrl);
+    })();
+  }, [username]);
+
   const hasOverdue = overdueEvents.length > 0;
   const isEmpty = upcomingEvents.length === 0 && overdueEvents.length === 0;
   const isHydratingFromCache = !hasHydrated && isEmpty;
@@ -292,10 +310,7 @@ export default function DashboardScreen() {
       style: { backgroundColor: theme.backgroundSecondary },
       labelStyle: actionLabelStyle,
       containerStyle: actionContainerStyle,
-      onPress: () => {
-        setShowFabMenu(false);
-        Linking.openURL("https://bunkx-iiitk.vercel.app");
-      },
+      onPress: handleOpenBunkx,
     },
     ...(isOldBatch
       ? [
