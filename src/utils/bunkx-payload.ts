@@ -175,7 +175,7 @@ export const encodeBunkxPayload = (payload: BunkxAttendancePayload): string => {
   while (index < uriEncoded.length) {
     const char = uriEncoded.charAt(index);
     if (char === "%" && index + 2 < uriEncoded.length) {
-      bytes.push(parseInt(uriEncoded.substr(index + 1, 2), 16));
+      bytes.push(parseInt(uriEncoded.slice(index + 1, index + 3), 16));
       index += 3;
       continue;
     }

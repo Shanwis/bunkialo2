@@ -23,7 +23,20 @@ const cleanupExpiredSessions = (): void => {
 };
 
 const generateSessionId = (): string => {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+  return crypto.randomUUID();
+};
+
+const generateUniqueSessionId = (): string => {
+  const maxAttempts = 8;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const sid = generateSessionId();
+    if (!sessionStore.has(sid)) {
+      return sid;
+    }
+  }
+
+  throw new Error("Could not generate unique session id");
 };
 
 export const createSession = (
@@ -34,7 +47,7 @@ export const createSession = (
 
   const now = Date.now();
   const expiresAtMs = now + Math.max(60_000, ttlMs);
-  const sid = generateSessionId();
+  const sid = generateUniqueSessionId();
 
   sessionStore.set(sid, {
     payload,

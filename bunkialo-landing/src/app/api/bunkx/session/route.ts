@@ -2,6 +2,31 @@ import { parseBunkxAttendancePayload } from "@/lib/bunkx-payload";
 import { createSession } from "@/lib/bunkx-session-store";
 import { NextResponse } from "next/server";
 
+const toSafeErrorMessage = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return "Invalid request payload";
+  }
+
+  const knownValidationMessages = new Set([
+    "Payload must be an object",
+    "attendance_rows must be an array",
+    "Invalid attendance row",
+    "Invalid period_date",
+    "Invalid session_time",
+    "Invalid course_code",
+    "Invalid subject_name",
+    "Invalid faculty",
+    "Invalid faculty_email",
+    "Invalid score",
+  ]);
+
+  if (knownValidationMessages.has(error.message)) {
+    return error.message;
+  }
+
+  return "An unexpected error occurred";
+};
+
 export async function POST(request: Request) {
   try {
     const payload = parseBunkxAttendancePayload(
@@ -16,8 +41,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Invalid request payload";
+    const message = toSafeErrorMessage(error);
 
     return NextResponse.json(
       {
