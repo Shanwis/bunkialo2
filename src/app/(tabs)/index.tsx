@@ -10,13 +10,16 @@ import { Toast } from "@/components";
 import { POPUP_NOTICES } from "@/data/popups";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { getCredentials } from "@/services/auth";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAttendanceStore } from "@/stores/attendance-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { useLmsResourcesStore } from "@/stores/lms-resources-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { usePopupStore } from "@/stores/popup-store";
+import {
+  buildBunkxAttendancePayload,
+  encodeBunkxPayload,
+} from "@/utils/bunkx-payload";
 import { scheduleIdleTask } from "@/utils/scheduling";
 import { initializeNotifications } from "@/utils/notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -63,6 +66,10 @@ export default function DashboardScreen() {
     fetchDashboard,
     hasHydrated,
   } = useDashboardStore();
+  const attendanceCourses = useAttendanceStore((state) => state.courses);
+  const attendanceLastSyncTime = useAttendanceStore(
+    (state) => state.lastSyncTime,
+  );
   const fetchAttendance = useAttendanceStore((state) => state.fetchAttendance);
   const { isOffline, setOffline, username } = useAuthStore();
   const {
@@ -246,14 +253,14 @@ export default function DashboardScreen() {
 
     void (async () => {
       try {
-        const credentials = await getCredentials();
-        const credentialUsername = credentials?.username ?? username;
-        const credentialPassword = credentials?.password;
-
+        const payload = buildBunkxAttendancePayload(
+          attendanceCourses,
+          attendanceLastSyncTime,
+        );
+        const encodedPayload = encodeBunkxPayload(payload);
         const launchUrl =
-          credentialUsername && credentialPassword
-            ? `https://${encodeURIComponent(credentialUsername)}:${encodeURIComponent(credentialPassword)}@bunkx-iiitk.vercel.app`
-            : "https://bunkx-iiitk.vercel.app";
+          "https://bunkx-iiitk.vercel.app/bunkialo?bunkdata=" +
+          encodeURIComponent(encodedPayload);
 
         await Linking.openURL(launchUrl);
       } catch (error) {
@@ -264,7 +271,7 @@ export default function DashboardScreen() {
         Toast.show(`Could not open Bunkx${errorMessage}`, { type: "error" });
       }
     })();
-  }, [username]);
+  }, [attendanceCourses, attendanceLastSyncTime]);
 
   const hasOverdue = overdueEvents.length > 0;
   const isEmpty = upcomingEvents.length === 0 && overdueEvents.length === 0;
