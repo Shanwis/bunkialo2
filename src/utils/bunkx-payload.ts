@@ -47,6 +47,14 @@ const parsePeriodDate = (rawDate: string, fallbackMs: number): string => {
     return toIsoDate(new Date(fallbackMs));
   }
 
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month ||
+    parsed.getDate() !== day
+  ) {
+    return toIsoDate(new Date(fallbackMs));
+  }
+
   return toIsoDate(parsed);
 };
 
@@ -68,24 +76,15 @@ const parseFacultyDetails = (
   remarks?: string,
 ): { faculty: string; faculty_email: string } => {
   const source = `${description} ${remarks ?? ""}`.trim();
-  const emailMatch = source.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  const faculty_email = emailMatch?.[0] ?? "";
 
   const facultyLabelMatch = source.match(
     /(?:faculty|teacher|staff|by)\s*[:\-]\s*([^,;|]+)/i,
   );
   const facultyFromLabel = facultyLabelMatch?.[1]?.trim();
 
-  const facultyFromEmail = faculty_email
-    ? faculty_email
-        .split("@")[0]
-        .replace(/[._-]+/g, " ")
-        .trim()
-    : "";
-
   return {
-    faculty: facultyFromLabel || facultyFromEmail || "Unknown",
-    faculty_email,
+    faculty: facultyFromLabel || "Unknown",
+    faculty_email: "",
   };
 };
 
