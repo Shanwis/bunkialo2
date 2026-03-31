@@ -58,21 +58,3 @@ export interface CourseStats {
   totalAttended: number;
   overallPercentage: number;
 }
-
-export interface BunkxAttendanceRow {
-  period_date: string;
-  session_time: string;
-  course_code: string;
-  subject_name: string;
-  faculty: string;
-  faculty_email: string;
-  course?: string;
-  score: string;
-  record_id?: string;
-}
-
-export interface BunkxAttendancePayload {
-  attendance_rows: BunkxAttendanceRow[];
-  dataset_id?: string;
-  dataset_expires_at?: string;
-}
