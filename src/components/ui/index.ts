@@ -4,4 +4,5 @@ export { Container } from "./container";
 export { GradientCard } from "./gradient-card";
 export { IconSymbol } from "./icon-symbol";
 export { Input } from "./input";
+export { SearchInput } from "./search-input";
 

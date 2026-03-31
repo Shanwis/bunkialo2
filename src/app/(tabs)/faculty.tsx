@@ -1,5 +1,6 @@
 import { FacultyCard } from "@/components/faculty/faculty-card";
 import { Container } from "@/components/ui/container";
+import { SearchInput } from "@/components/ui/search-input";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
@@ -113,45 +114,19 @@ export default function FacultyScreen() {
           Faculty
         </Text>
 
-        <View
-          className="h-11 flex-row items-center gap-3 rounded-xl border px-4"
-          style={{
-            backgroundColor: isDark ? Colors.gray[900] : Colors.gray[100],
-            borderColor: isSearchFocused ? theme.text : "transparent",
-          }}
-        >
-          <Ionicons name="search" size={18} color={theme.textSecondary} />
-          <TextInput
-            ref={inputRef}
-            className="h-10 flex-1 py-0 text-[15px]"
-            style={{
-              color: theme.text,
-              textAlignVertical: "center",
-              includeFontPadding: false,
-              lineHeight: 18,
-              paddingTop: 0,
-              paddingBottom: 0,
-            }}
-            placeholder="Search by name, room, qualification"
-            placeholderTextColor={theme.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setIsSearchFocused(false)}
-            onSubmitEditing={handleSubmit}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={handleClearSearch} hitSlop={8}>
-              <Ionicons
-                name="close-circle"
-                size={18}
-                color={theme.textSecondary}
-              />
-            </Pressable>
-          )}
-        </View>
+        <SearchInput
+          ref={inputRef}
+          focused={isSearchFocused}
+          placeholder="Search by name, room, qualification"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onFocus={() => setIsSearchFocused(true)}
+          onBlur={() => setIsSearchFocused(false)}
+          onSubmitEditing={handleSubmit}
+          returnKeyType="search"
+          autoCorrect={false}
+          onClear={handleClearSearch}
+        />
 
         {/* recent searches */}
         {showRecentSearches && (

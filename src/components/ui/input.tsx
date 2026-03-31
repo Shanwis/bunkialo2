@@ -25,16 +25,19 @@ export function Input({ label, error, style, ...props }: InputProps) {
         </Text>
       )}
       <TextInput
-        className="h-[52px] rounded-xl border px-4 text-base"
+        className="min-h-[52px] rounded-xl border px-4 py-3 text-base leading-5"
         style={[
           {
             backgroundColor: isDark ? Colors.gray[900] : Colors.gray[100],
             color: theme.text,
             borderColor: error ? Colors.status.danger : theme.border,
+            textAlignVertical: "center",
+            includeFontPadding: false,
           },
           style,
         ]}
         placeholderTextColor={theme.textSecondary}
+        multiline={false}
         {...props}
       />
       {error && <Text className="ml-1 text-xs text-red-500">{error}</Text>}
