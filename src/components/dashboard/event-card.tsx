@@ -1,8 +1,6 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import {
-  resolveDashboardEventRoute,
-} from "@/app/course/utils/event-route";
+import { resolveDashboardEventRoute } from "@/app/course/utils/event-route";
 import { useBunkStore } from "@/stores/bunk-store";
 import { Toast } from "@/components";
 import type { TimelineEvent } from "@/types";
@@ -36,7 +34,10 @@ const formatRelativeTime = (timestamp: number, nowMs: number): string => {
   return `in ${minutes}m`;
 };
 
-const formatRelativeTimeWithSeconds = (timestamp: number, nowMs: number): string => {
+const formatRelativeTimeWithSeconds = (
+  timestamp: number,
+  nowMs: number,
+): string => {
   const diff = timestamp * 1000 - nowMs;
   const absDiffSeconds = Math.floor(Math.abs(diff) / 1000);
   const minutes = Math.floor(absDiffSeconds / 60);
@@ -49,7 +50,10 @@ const formatRelativeTimeWithSeconds = (timestamp: number, nowMs: number): string
   return `in ${minutes}:${secondsText}`;
 };
 
-const formatDetailedRelativeTime = (timestamp: number, nowMs: number): string => {
+const formatDetailedRelativeTime = (
+  timestamp: number,
+  nowMs: number,
+): string => {
   const diff = timestamp * 1000 - nowMs;
   const absDiffSeconds = Math.floor(Math.abs(diff) / 1000);
   const days = Math.floor(absDiffSeconds / 86400);
@@ -89,12 +93,11 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
   const isPastDue = isOverdue || event.overdue;
   const msToDue = event.timesort * 1000 - nowMs;
   const isWithinNextHour = msToDue > 0 && msToDue <= 60 * 60 * 1000;
-  const dueText =
-    isWithinNextHour
-      ? formatRelativeTimeWithSeconds(event.timesort, nowMs)
-      : showPreciseCountdown
-        ? formatDetailedRelativeTime(event.timesort, nowMs)
-        : formatRelativeTime(event.timesort, nowMs);
+  const dueText = isWithinNextHour
+    ? formatRelativeTimeWithSeconds(event.timesort, nowMs)
+    : showPreciseCountdown
+      ? formatDetailedRelativeTime(event.timesort, nowMs)
+      : formatRelativeTime(event.timesort, nowMs);
   const rawCourseName = event.course.fullname || event.course.shortname || "";
   const courseName = extractCourseName(rawCourseName) || "Course";
   const fallbackColor =
@@ -129,9 +132,14 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
     }
 
     if (route.type === "assignment") {
-      router.push(
-        `/course/${route.courseId}/assignment/${route.assignmentId}`,
-      );
+      router.push({
+        pathname: "/course/[courseid]/assignment/[assignmentid]",
+        params: {
+          courseid: route.courseId,
+          assignmentid: route.assignmentId,
+          fallbackDueAt: String(event.timesort * 1000),
+        },
+      });
       return;
     }
 
@@ -163,9 +171,7 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
         <View
           className="h-7 w-7 items-center justify-center rounded-lg"
           style={{
-            backgroundColor: isPastDue
-              ? Colors.status.danger
-              : courseColor,
+            backgroundColor: isPastDue ? Colors.status.danger : courseColor,
           }}
         >
           <Ionicons
@@ -247,10 +253,17 @@ export const EventCard = ({ event, isOverdue }: EventCardProps) => {
           }}
         >
           <View className="flex-row items-center gap-1.5">
-            <Text className="text-xs font-semibold" style={{ color: theme.text }}>
+            <Text
+              className="text-xs font-semibold"
+              style={{ color: theme.text }}
+            >
               Open LMS
             </Text>
-            <Ionicons name="open-outline" size={12} color={theme.textSecondary} />
+            <Ionicons
+              name="open-outline"
+              size={12}
+              color={theme.textSecondary}
+            />
           </View>
         </Pressable>
       </View>

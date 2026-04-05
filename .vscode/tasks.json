@@ -69,6 +69,22 @@
       }
     },
     {
+      "label": "Start Expo",
+      "type": "shell",
+      "command": "bunx",
+      "args": ["expo", "start"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "close": false
+      }
+    },
+    {
       "label": "Bump Version (Build minor+patch)",
       "type": "shell",
       "command": "powershell",

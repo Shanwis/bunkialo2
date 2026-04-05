@@ -58,12 +58,19 @@ const normalizeParam = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 
 export default function AssignmentDetailScreen() {
-  const { courseid, assignmentid } = useLocalSearchParams<{
+  const { courseid, assignmentid, fallbackDueAt } = useLocalSearchParams<{
     courseid?: string | string[];
     assignmentid?: string | string[];
+    fallbackDueAt?: string | string[];
   }>();
   const courseId = normalizeParam(courseid);
   const assignmentId = normalizeParam(assignmentid);
+  const fallbackDueAtMs = useMemo(() => {
+    const raw = normalizeParam(fallbackDueAt);
+    if (!raw) return null;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [fallbackDueAt]);
 
   const colorScheme = useColorScheme();
   const isOffline = useAuthStore((state) => state.isOffline);
@@ -77,8 +84,12 @@ export default function AssignmentDetailScreen() {
   const refreshAssignmentDetails = useAssignmentStore(
     (state) => state.refreshAssignmentDetails,
   );
-  const startEditSession = useAssignmentStore((state) => state.startEditSession);
-  const submitAssignment = useAssignmentStore((state) => state.submitAssignment);
+  const startEditSession = useAssignmentStore(
+    (state) => state.startEditSession,
+  );
+  const submitAssignment = useAssignmentStore(
+    (state) => state.submitAssignment,
+  );
 
   const entry = useAssignmentStore((state) =>
     assignmentId ? state.detailsByAssignmentId[assignmentId] : undefined,
@@ -87,7 +98,9 @@ export default function AssignmentDetailScreen() {
     assignmentId ? state.editSessionByAssignmentId[assignmentId] : undefined,
   );
   const isLoading = useAssignmentStore((state) =>
-    assignmentId ? (state.isLoadingByAssignmentId[assignmentId] ?? false) : false,
+    assignmentId
+      ? (state.isLoadingByAssignmentId[assignmentId] ?? false)
+      : false,
   );
   const isSubmitting = useAssignmentStore((state) =>
     assignmentId
@@ -109,7 +122,7 @@ export default function AssignmentDetailScreen() {
   );
   const supportsOnlineTextSubmission = Boolean(
     details?.supportsOnlineTextSubmission ||
-      editSession?.supportsOnlineTextSubmission,
+    editSession?.supportsOnlineTextSubmission,
   );
   const canEditSubmission = Boolean(details?.canEditSubmission);
   const effectiveMaxFiles = details?.maxFiles ?? editSession?.maxFiles ?? null;
@@ -149,11 +162,14 @@ export default function AssignmentDetailScreen() {
     setHasSeededOnlineText(true);
   }, [editSession?.onlineTextDraftHtml, hasSeededOnlineText]);
 
-  const dueIsOverdue = Boolean(details?.dueAt && details.dueAt < Date.now());
+  const dueAtForDisplay = details?.dueAt ?? fallbackDueAtMs;
+  const dueIsOverdue = Boolean(dueAtForDisplay && dueAtForDisplay < Date.now());
   const resolvedCourseId = details?.courseId ?? courseId;
-  const breadcrumbCourse = details?.courseName ?? (courseId ? `Course ${courseId}` : "Course");
+  const breadcrumbCourse =
+    details?.courseName ?? (courseId ? `Course ${courseId}` : "Course");
   const breadcrumbAssignment =
-    details?.assignmentName ?? (assignmentId ? `Assignment ${assignmentId}` : "Assignment");
+    details?.assignmentName ??
+    (assignmentId ? `Assignment ${assignmentId}` : "Assignment");
   const maxFileSizeLabel = useMemo(
     () => formatMaxBytes(effectiveMaxBytes),
     [effectiveMaxBytes],
@@ -217,9 +233,12 @@ export default function AssignmentDetailScreen() {
     let nextFiles = Array.from(deduped.values());
     if (effectiveMaxFiles !== null && nextFiles.length > effectiveMaxFiles) {
       nextFiles = nextFiles.slice(0, effectiveMaxFiles);
-      Toast.show(`Only ${effectiveMaxFiles} file(s) allowed for this assignment`, {
-        type: "warning",
-      });
+      Toast.show(
+        `Only ${effectiveMaxFiles} file(s) allowed for this assignment`,
+        {
+          type: "warning",
+        },
+      );
     }
 
     setFiles(nextFiles);
@@ -278,75 +297,74 @@ export default function AssignmentDetailScreen() {
 
     Toast.show(result.message, { type: "error" });
   };
-    const FLAG_GRANT_READ_URI_PERMISSION = 1;
+  const FLAG_GRANT_READ_URI_PERMISSION = 1;
 
-const normalizeMimeType = (contentType: string | null): string => {
-  const baseType = contentType?.split(";")[0]?.trim().toLowerCase();
-  return baseType || "*/*";
-};
+  const normalizeMimeType = (contentType: string | null): string => {
+    const baseType = contentType?.split(";")[0]?.trim().toLowerCase();
+    return baseType || "*/*";
+  };
 
-const getFileIconName = (name: string): keyof typeof Ionicons.glyphMap => {
-  const ext = name.split(".").pop()?.toLowerCase();
+  const getFileIconName = (name: string): keyof typeof Ionicons.glyphMap => {
+    const ext = name.split(".").pop()?.toLowerCase();
 
-  switch (ext) {
-    case "pdf":
-      return "document-text";
+    switch (ext) {
+      case "pdf":
+        return "document-text";
 
-    case "jpg":
-    case "jpeg":
-    case "png":
-    case "gif":
-    case "webp":
-    case "svg":
-      return "image";
+      case "jpg":
+      case "jpeg":
+      case "png":
+      case "gif":
+      case "webp":
+      case "svg":
+        return "image";
 
-    case "mp4":
-    case "mov":
-    case "avi":
-    case "mkv":
-      return "videocam";
+      case "mp4":
+      case "mov":
+      case "avi":
+      case "mkv":
+        return "videocam";
 
-    case "mp3":
-    case "wav":
-    case "aac":
-      return "musical-notes";
+      case "mp3":
+      case "wav":
+      case "aac":
+        return "musical-notes";
 
-    case "zip":
-    case "rar":
-    case "7z":
-    case "tar":
-    case "gz":
-      return "archive";
+      case "zip":
+      case "rar":
+      case "7z":
+      case "tar":
+      case "gz":
+        return "archive";
 
-    case "doc":
-    case "docx":
-      return "document";
+      case "doc":
+      case "docx":
+        return "document";
 
-    case "ppt":
-    case "pptx":
-      return "easel";
+      case "ppt":
+      case "pptx":
+        return "easel";
 
-    case "xls":
-    case "xlsx":
-    case "csv":
-      return "grid";
+      case "xls":
+      case "xlsx":
+      case "csv":
+        return "grid";
 
-    case "txt":
-    case "md":
-      return "document-outline";
+      case "txt":
+      case "md":
+        return "document-outline";
 
-    default:
-      return "attach";
-  }
-};
+      default:
+        return "attach";
+    }
+  };
 
-const openExternal = async (url: string, preferredName: string) => {
-  if (downloadingUrlSet[url]) return;
+  const openExternal = async (url: string, preferredName: string) => {
+    if (downloadingUrlSet[url]) return;
 
-  setDownloadingUrlSet((prev) => ({ ...prev, [url]: true }));
+    setDownloadingUrlSet((prev) => ({ ...prev, [url]: true }));
 
-
-  try {
+    try {
       const result = await downloadLmsResourceWithSession(url, preferredName);
       if (!result.success) {
         Toast.show(result.message || "Download failed", { type: "error" });
@@ -357,40 +375,40 @@ const openExternal = async (url: string, preferredName: string) => {
         });
         return;
       }
-    const mime = normalizeMimeType(result.contentType);
+      const mime = normalizeMimeType(result.contentType);
 
-    if (Platform.OS === "android") {
-      const contentUri = await getContentUriAsync(result.uri);
+      if (Platform.OS === "android") {
+        const contentUri = await getContentUriAsync(result.uri);
 
-      await startActivityAsync("android.intent.action.VIEW", {
-        data: contentUri,
-        type: mime,
-        flags: FLAG_GRANT_READ_URI_PERMISSION,
-      });
-    } else {
-      const canShare = await isAvailableAsync();
-      if (canShare) {
-        await shareAsync(result.uri, { mimeType: mime });
+        await startActivityAsync("android.intent.action.VIEW", {
+          data: contentUri,
+          type: mime,
+          flags: FLAG_GRANT_READ_URI_PERMISSION,
+        });
       } else {
-        await Linking.openURL(result.uri);
+        const canShare = await isAvailableAsync();
+        if (canShare) {
+          await shareAsync(result.uri, { mimeType: mime });
+        } else {
+          await Linking.openURL(result.uri);
+        }
       }
+
+      Toast.show("Downloaded successfully", { type: "success" });
+    } catch (error) {
+      debug.api("assignment resource open failed", error);
+
+      Toast.show("Downloaded but could not open file", {
+        type: "warning",
+      });
+    } finally {
+      setDownloadingUrlSet((prev) => {
+        const next = { ...prev };
+        delete next[url];
+        return next;
+      });
     }
-
-    Toast.show("Downloaded successfully", { type: "success" });
-  } catch (error) {
-    debug.api("assignment resource open failed", error);
-
-    Toast.show("Downloaded but could not open file", {
-      type: "warning",
-    });
-  } finally {
-    setDownloadingUrlSet((prev) => {
-      const next = { ...prev };
-      delete next[url];
-      return next;
-    });
-  }
-};
+  };
 
   return (
     <Container className="relative">
@@ -426,7 +444,10 @@ const openExternal = async (url: string, preferredName: string) => {
                 borderColor: theme.border,
               }}
             >
-              <Text className="text-[10px]" style={{ color: theme.textSecondary }}>
+              <Text
+                className="text-[10px]"
+                style={{ color: theme.textSecondary }}
+              >
                 {formatSyncTime(entry?.lastSyncTime ?? null)}
               </Text>
             </View>
@@ -434,14 +455,20 @@ const openExternal = async (url: string, preferredName: string) => {
 
           <View
             className="rounded-2xl border px-4 py-3"
-            style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}
+            style={{
+              borderColor: theme.border,
+              backgroundColor: theme.backgroundSecondary,
+            }}
           >
             <View className="flex-row flex-wrap items-center gap-1.5">
               <Pressable
                 className="rounded-md px-1 py-0.5"
                 onPress={openDashboard}
               >
-                <Text className="text-[12px] font-semibold" style={{ color: theme.textSecondary }}>
+                <Text
+                  className="text-[12px] font-semibold"
+                  style={{ color: theme.textSecondary }}
+                >
                   Dashboard
                 </Text>
               </Pressable>
@@ -460,7 +487,9 @@ const openExternal = async (url: string, preferredName: string) => {
                 <Text
                   className="text-[12px] font-semibold"
                   style={{
-                    color: resolvedCourseId ? theme.textSecondary : `${theme.textSecondary}88`,
+                    color: resolvedCourseId
+                      ? theme.textSecondary
+                      : `${theme.textSecondary}88`,
                   }}
                   numberOfLines={1}
                 >
@@ -483,7 +512,10 @@ const openExternal = async (url: string, preferredName: string) => {
               </Text>
             </View>
 
-            <Text className="mt-1 text-[24px] font-extrabold leading-[30px]" style={{ color: theme.text }}>
+            <Text
+              className="mt-1 text-[24px] font-extrabold leading-[30px]"
+              style={{ color: theme.text }}
+            >
               {breadcrumbAssignment}
             </Text>
           </View>
@@ -520,7 +552,10 @@ const openExternal = async (url: string, preferredName: string) => {
                 void refreshAssignmentDetails(assignmentId);
               }}
             >
-              <Text className="text-[13px] font-semibold" style={{ color: theme.text }}>
+              <Text
+                className="text-[13px] font-semibold"
+                style={{ color: theme.text }}
+              >
                 Retry
               </Text>
             </Pressable>
@@ -529,143 +564,209 @@ const openExternal = async (url: string, preferredName: string) => {
 
         {details && (
           <View className="gap-3">
-            <View className="rounded-2xl border p-4" style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}>
-              <Text className="text-[15px] font-semibold" style={{ color: theme.text }}>
+            <View
+              className="rounded-2xl border p-4"
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.backgroundSecondary,
+              }}
+            >
+              <Text
+                className="text-[15px] font-semibold"
+                style={{ color: theme.text }}
+              >
                 Assignment Info
               </Text>
               <View className="mt-2 gap-1.5">
-                <Text className="text-[13px]" style={{ color: theme.textSecondary }}>
+                <Text
+                  className="text-[13px]"
+                  style={{ color: theme.textSecondary }}
+                >
                   Opened: {formatDateTime(details.openedAt)}
                 </Text>
                 <Text
                   className="text-[13px] font-semibold"
                   style={{
-                    color: dueIsOverdue ? Colors.status.danger : theme.textSecondary,
+                    color: dueIsOverdue
+                      ? Colors.status.danger
+                      : theme.textSecondary,
                   }}
                 >
-                  Due: {formatDateTime(details.dueAt)}
+                  Due: {formatDateTime(dueAtForDisplay)}
                 </Text>
                 {details.cutoffAt && (
-                  <Text className="text-[13px]" style={{ color: theme.textSecondary }}>
+                  <Text
+                    className="text-[13px]"
+                    style={{ color: theme.textSecondary }}
+                  >
                     Cutoff: {formatDateTime(details.cutoffAt)}
                   </Text>
                 )}
                 {details.allowSubmissionsFrom && (
-                  <Text className="text-[13px]" style={{ color: theme.textSecondary }}>
-                    Allow submissions from: {formatDateTime(details.allowSubmissionsFrom)}
+                  <Text
+                    className="text-[13px]"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    Allow submissions from:{" "}
+                    {formatDateTime(details.allowSubmissionsFrom)}
                   </Text>
                 )}
               </View>
             </View>
 
-            <View className="rounded-2xl border p-4" style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}>
-              <Text className="text-[15px] font-semibold" style={{ color: theme.text }}>
+            <View
+              className="rounded-2xl border p-4"
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.backgroundSecondary,
+              }}
+            >
+              <Text
+                className="text-[15px] font-semibold"
+                style={{ color: theme.text }}
+              >
                 Description
               </Text>
-              <Text className="mt-2 text-[13px] leading-5" style={{ color: theme.textSecondary }}>
-                {details.descriptionText || "No assignment description provided."}
+              <Text
+                className="mt-2 text-[13px] leading-5"
+                style={{ color: theme.textSecondary }}
+              >
+                {details.descriptionText ||
+                  "No assignment description provided."}
               </Text>
               {details.resources && details.resources.length > 0 && (
-              <View className="mt-3 gap-2">
-                <Text
-                  className="text-[15px] font-semibold"
-                  style={{ color: theme.text }}
-                >
-                  Resources
-                </Text>
+                <View className="mt-3 gap-2">
+                  <Text
+                    className="text-[15px] font-semibold"
+                    style={{ color: theme.text }}
+                  >
+                    Resources
+                  </Text>
 
-                {details.resources.map((resource) => {
-                  const preferredName =
-                    resource.name?.trim() ||
-                    (() => {
-                      const raw = resource.url.split("/").pop()?.split("?")[0].split("#")[0] || "";
-                      try {
-                        return decodeURIComponent(raw);
-                      } catch {
-                        return raw;
-                      }
-                    })() ||
-                    "assignment-resource";
+                  {details.resources.map((resource) => {
+                    const preferredName =
+                      resource.name?.trim() ||
+                      (() => {
+                        const raw =
+                          resource.url
+                            .split("/")
+                            .pop()
+                            ?.split("?")[0]
+                            .split("#")[0] || "";
+                        try {
+                          return decodeURIComponent(raw);
+                        } catch {
+                          return raw;
+                        }
+                      })() ||
+                      "assignment-resource";
 
-                  const iconName = getFileIconName(preferredName);
-                  const isDownloading = Boolean(downloadingUrlSet[resource.url]);
+                    const iconName = getFileIconName(preferredName);
+                    const isDownloading = Boolean(
+                      downloadingUrlSet[resource.url],
+                    );
 
-                  return (
-                    <Pressable
-                      key={resource.id}
-                      disabled={isDownloading}
-                      className="flex-row items-center gap-3 rounded-xl border px-3 py-3"
-                      style={{
-                        borderColor: theme.border,
-                        backgroundColor: theme.background,
-                        opacity: isDownloading ? 0.6 : 1,
-                      }}
-                      onPress={() => {
-                        if (isDownloading) return;
-                        void openExternal(resource.url, preferredName);
-                      }}
-                    >
-                      <Ionicons
-                        name={iconName}
-                        size={20}
-                        color={Colors.accent}
-                      />
-
-                      <View className="flex-1">
-                        <Text
-                          className="text-[13px] font-medium"
-                          style={{ color: theme.text }}
-                          numberOfLines={2}
-                        >
-                          {preferredName}
-                        </Text>
-                      </View>
-
-                      {isDownloading ? (
-                        <ActivityIndicator size="small" color={theme.textSecondary} />
-                      ) : (
+                    return (
+                      <Pressable
+                        key={resource.id}
+                        disabled={isDownloading}
+                        className="flex-row items-center gap-3 rounded-xl border px-3 py-3"
+                        style={{
+                          borderColor: theme.border,
+                          backgroundColor: theme.background,
+                          opacity: isDownloading ? 0.6 : 1,
+                        }}
+                        onPress={() => {
+                          if (isDownloading) return;
+                          void openExternal(resource.url, preferredName);
+                        }}
+                      >
                         <Ionicons
-                          name="download-outline"
-                          size={18}
-                          color={theme.textSecondary}
+                          name={iconName}
+                          size={20}
+                          color={Colors.accent}
                         />
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
+
+                        <View className="flex-1">
+                          <Text
+                            className="text-[13px] font-medium"
+                            style={{ color: theme.text }}
+                            numberOfLines={2}
+                          >
+                            {preferredName}
+                          </Text>
+                        </View>
+
+                        {isDownloading ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={theme.textSecondary}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="download-outline"
+                            size={18}
+                            color={theme.textSecondary}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
-            <View className="rounded-2xl border p-4" style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}>
-              <Text className="text-[15px] font-semibold" style={{ color: theme.text }}>
+            <View
+              className="rounded-2xl border p-4"
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.backgroundSecondary,
+              }}
+            >
+              <Text
+                className="text-[15px] font-semibold"
+                style={{ color: theme.text }}
+              >
                 Submission
               </Text>
 
               <View className="mt-2 gap-1.5">
-                <Text className="text-[13px]" style={{ color: theme.textSecondary }}>
+                <Text
+                  className="text-[13px]"
+                  style={{ color: theme.textSecondary }}
+                >
                   Status: {details.submissionStatusText || "Not available"}
                 </Text>
-                <Text className="text-[13px]" style={{ color: theme.textSecondary }}>
+                <Text
+                  className="text-[13px]"
+                  style={{ color: theme.textSecondary }}
+                >
                   Grading: {details.gradingStatusText || "Not available"}
                 </Text>
-                <Text className="text-[13px]" style={{ color: theme.textSecondary }}>
+                <Text
+                  className="text-[13px]"
+                  style={{ color: theme.textSecondary }}
+                >
                   Time remaining: {details.timeRemainingText || "Not available"}
                 </Text>
-                <Text className="text-[12px]" style={{ color: theme.textSecondary }}>
-                  Methods:{" "}
-                  {supportsFileSubmission ? "File" : ""}
+                <Text
+                  className="text-[12px]"
+                  style={{ color: theme.textSecondary }}
+                >
+                  Methods: {supportsFileSubmission ? "File" : ""}
                   {supportsFileSubmission && supportsOnlineTextSubmission
                     ? " + "
                     : ""}
                   {supportsOnlineTextSubmission ? "Online text" : ""}
-                  {!supportsFileSubmission &&
-                  !supportsOnlineTextSubmission
+                  {!supportsFileSubmission && !supportsOnlineTextSubmission
                     ? "Not editable"
                     : ""}
                 </Text>
                 {supportsFileSubmission && (
-                  <Text className="text-[12px]" style={{ color: theme.textSecondary }}>
+                  <Text
+                    className="text-[12px]"
+                    style={{ color: theme.textSecondary }}
+                  >
                     Limits: {effectiveMaxFiles ?? "?"} file(s)
                     {maxFileSizeLabel ? `, ${maxFileSizeLabel}` : ""}
                   </Text>
@@ -676,10 +777,16 @@ const openExternal = async (url: string, preferredName: string) => {
                 <View className="mt-3 gap-2">
                   <Pressable
                     className="rounded-xl border px-3 py-2.5"
-                    style={{ borderColor: theme.border, backgroundColor: theme.background }}
+                    style={{
+                      borderColor: theme.border,
+                      backgroundColor: theme.background,
+                    }}
                     onPress={() => void addFiles()}
                   >
-                    <Text className="text-[13px] font-semibold" style={{ color: theme.text }}>
+                    <Text
+                      className="text-[13px] font-semibold"
+                      style={{ color: theme.text }}
+                    >
                       Add File
                     </Text>
                   </Pressable>
@@ -690,7 +797,10 @@ const openExternal = async (url: string, preferredName: string) => {
                         <View
                           key={`${file.uri}-${file.name}`}
                           className="flex-row items-center justify-between rounded-xl border px-3 py-2"
-                          style={{ borderColor: theme.border, backgroundColor: theme.background }}
+                          style={{
+                            borderColor: theme.border,
+                            backgroundColor: theme.background,
+                          }}
                         >
                           <Text
                             className="flex-1 pr-2 text-[12px]"
@@ -733,7 +843,10 @@ const openExternal = async (url: string, preferredName: string) => {
               )}
 
               {(isSubmitting || uploadProgress !== null) && (
-                <Text className="mt-3 text-[12px]" style={{ color: theme.textSecondary }}>
+                <Text
+                  className="mt-3 text-[12px]"
+                  style={{ color: theme.textSecondary }}
+                >
                   {uploadProgress !== null
                     ? `Uploading ${Math.round(uploadProgress * 100)}%`
                     : "Submitting..."}
@@ -773,10 +886,16 @@ const openExternal = async (url: string, preferredName: string) => {
 
                 <Pressable
                   className="items-center rounded-xl border px-3 py-2.5"
-                  style={{ borderColor: theme.border, backgroundColor: theme.background }}
+                  style={{
+                    borderColor: theme.border,
+                    backgroundColor: theme.background,
+                  }}
                   onPress={() => void openOnLms()}
                 >
-                  <Text className="text-[13px] font-semibold" style={{ color: theme.text }}>
+                  <Text
+                    className="text-[13px] font-semibold"
+                    style={{ color: theme.text }}
+                  >
                     Open LMS
                   </Text>
                 </Pressable>

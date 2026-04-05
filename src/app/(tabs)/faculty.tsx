@@ -117,7 +117,7 @@ export default function FacultyScreen() {
         <SearchInput
           ref={inputRef}
           focused={isSearchFocused}
-          placeholder="Search by name, room, qualification"
+          placeholder="Search"
           value={searchQuery}
           onChangeText={setSearchQuery}
           onFocus={() => setIsSearchFocused(true)}

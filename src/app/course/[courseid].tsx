@@ -215,7 +215,9 @@ export default function CourseResourcesScreen() {
       }
 
       try {
-        const normalizedMimeType = normalizeMimeType(downloadResult.contentType);
+        const normalizedMimeType = normalizeMimeType(
+          downloadResult.contentType,
+        );
         if (Platform.OS === "android") {
           const contentUri = await getContentUriAsync(downloadResult.uri);
           await startActivityAsync("android.intent.action.VIEW", {
@@ -272,7 +274,13 @@ export default function CourseResourcesScreen() {
     if (item.moduleType === "assign") {
       const assignmentId = parseAssignmentIdFromUrl(item.url);
       if (assignmentId) {
-        router.push(`/course/${courseId}/assignment/${assignmentId}`);
+        router.push({
+          pathname: "/course/[courseid]/assignment/[assignmentid]",
+          params: {
+            courseid: courseId,
+            assignmentid: assignmentId,
+          },
+        });
         return;
       }
 
@@ -333,10 +341,7 @@ export default function CourseResourcesScreen() {
             <Ionicons name={moduleVisual.icon} size={16} color={theme.icon} />
           </View>
 
-          <Pressable
-            className="flex-1"
-            onPress={() => openItem(item)}
-          >
+          <Pressable className="flex-1" onPress={() => openItem(item)}>
             <View className="flex-row items-center gap-2">
               <View
                 className="rounded-md border px-2 py-0.5"

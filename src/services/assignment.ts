@@ -68,7 +68,50 @@ const parseTimestamp = (value: string | null): number | null => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const parseNumberValue = (value: string | number | null | undefined): number | null => {
+const parseTimestampFromDateText = (value: string | null): number | null => {
+  if (!value) return null;
+
+  const direct = parseTimestamp(value);
+  if (direct) return direct;
+
+  const separatorIndex = value.indexOf(":");
+  if (separatorIndex <= 0) return null;
+
+  const stripped = normalizeText(value.slice(separatorIndex + 1));
+  return parseTimestamp(stripped);
+};
+
+const resolveAssignmentDateKey = (rawKey: string): AssignmentDateKey | null => {
+  const normalizedKey = normalizeText(rawKey)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/-/g, " ");
+
+  if (
+    normalizedKey.startsWith("opened") ||
+    normalizedKey.startsWith("opening time")
+  ) {
+    return "opened";
+  }
+  if (normalizedKey.startsWith("due") || normalizedKey.startsWith("due date")) {
+    return "due";
+  }
+  if (
+    normalizedKey.startsWith("cut off") ||
+    normalizedKey.startsWith("cutoff")
+  ) {
+    return "cutoff";
+  }
+  if (normalizedKey.startsWith("allow submissions from")) {
+    return "allow submissions from";
+  }
+
+  return null;
+};
+
+const parseNumberValue = (
+  value: string | number | null | undefined,
+): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
     const parsed = Number.parseInt(value, 10);
@@ -94,7 +137,10 @@ const ensureAuthenticatedSession = async (): Promise<boolean> => {
   return relogin;
 };
 
-const extractJsonObjectAfterMarker = (input: string, marker: string): string | null => {
+const extractJsonObjectAfterMarker = (
+  input: string,
+  marker: string,
+): string | null => {
   const markerIndex = input.indexOf(marker);
   if (markerIndex === -1) return null;
 
@@ -157,10 +203,14 @@ const parseFileManagerConfig = (html: string): FileManagerInitConfig | null => {
   }
 };
 
-const getUploadRepositoryId = (config: FileManagerInitConfig | null): string | null => {
+const getUploadRepositoryId = (
+  config: FileManagerInitConfig | null,
+): string | null => {
   if (!config?.filepicker?.repositories) return null;
 
-  for (const [repoKey, repo] of Object.entries(config.filepicker.repositories)) {
+  for (const [repoKey, repo] of Object.entries(
+    config.filepicker.repositories,
+  )) {
     if (repo.type !== "upload") continue;
     const rawId = repo.id ?? repoKey;
     return String(rawId);
@@ -169,11 +219,11 @@ const getUploadRepositoryId = (config: FileManagerInitConfig | null): string | n
   return null;
 };
 
-const getAcceptedFileTypes = (config: FileManagerInitConfig | null): string[] => {
+const getAcceptedFileTypes = (
+  config: FileManagerInitConfig | null,
+): string[] => {
   const raw =
-    config?.filepicker?.accepted_types ??
-    config?.accepted_types ??
-    [];
+    config?.filepicker?.accepted_types ?? config?.accepted_types ?? [];
 
   const normalized = raw
     .map((type) => normalizeText(String(type).toLowerCase()))
@@ -187,7 +237,9 @@ const parseSubmissionStatusRows = (root: Element): Record<string, string> => {
   const map: Record<string, string> = {};
 
   for (const row of rows) {
-    const label = normalizeText(getText(querySelector(row, "th"))).toLowerCase();
+    const label = normalizeText(
+      getText(querySelector(row, "th")),
+    ).toLowerCase();
     const value = normalizeText(getText(querySelector(row, "td")));
     if (!label || !value) continue;
     map[label] = value;
@@ -207,20 +259,42 @@ const parseActivityDates = (
     if (!text.includes(":")) continue;
 
     const separatorIndex = text.indexOf(":");
-    const rawKey = normalizeText(text.slice(0, separatorIndex)).toLowerCase();
+    const rawKey = normalizeText(text.slice(0, separatorIndex));
     const rawValue = normalizeText(text.slice(separatorIndex + 1));
 
-    const timestamp = parseTimestamp(rawValue);
+    const key = resolveAssignmentDateKey(rawKey);
+    if (!key) continue;
+
+    const timestamp = parseTimestampFromDateText(rawValue);
     if (!timestamp) continue;
 
-    if (rawKey.startsWith("opened")) values.opened = timestamp;
-    if (rawKey.startsWith("due")) values.due = timestamp;
-    if (rawKey.startsWith("cut-off") || rawKey.startsWith("cutoff")) {
-      values.cutoff = timestamp;
-    }
-    if (rawKey.startsWith("allow submissions from")) {
-      values["allow submissions from"] = timestamp;
-    }
+    values[key] = timestamp;
+  }
+
+  return values;
+};
+
+const parseActivityDatesFromStatusTables = (
+  root: Document | Element,
+): Partial<Record<AssignmentDateKey, number>> => {
+  const values: Partial<Record<AssignmentDateKey, number>> = {};
+  const rows = querySelectorAll(
+    root,
+    ".submissionstatustable tr, table.generaltable tr",
+  );
+
+  for (const row of rows) {
+    const label = normalizeText(getText(querySelector(row, "th")));
+    const value = normalizeText(getText(querySelector(row, "td")));
+    if (!label || !value) continue;
+
+    const key = resolveAssignmentDateKey(label);
+    if (!key) continue;
+
+    const timestamp = parseTimestampFromDateText(value);
+    if (!timestamp) continue;
+
+    values[key] = timestamp;
   }
 
   return values;
@@ -326,7 +400,10 @@ const validateFileType = (
 };
 
 const resolveOnlineTextFieldName = (form: Element): string | null => {
-  const preferredField = querySelector(form, "textarea[name*='onlinetext'][name$='[text]']");
+  const preferredField = querySelector(
+    form,
+    "textarea[name*='onlinetext'][name$='[text]']",
+  );
   const preferredName = getAttr(preferredField, "name");
   if (preferredName) return preferredName;
 
@@ -342,7 +419,9 @@ const getFieldValue = (field: Element | null): string => {
   return getAttr(field, "value") ?? "";
 };
 
-const toUploadFile = (file: AssignmentUploadLocalFile): AssignmentUploadLocalFile => {
+const toUploadFile = (
+  file: AssignmentUploadLocalFile,
+): AssignmentUploadLocalFile => {
   const normalizedName = normalizeText(file.name);
   return {
     uri: file.uri,
@@ -372,7 +451,9 @@ export const parseAssignmentIdFromUrl = (url: string): string | null =>
 export const fetchAssignmentDetails = async (
   assignmentId: string,
 ): Promise<AssignmentDetails> => {
-  const response = await api.get<string>(`/mod/assign/view.php?id=${assignmentId}`);
+  const response = await api.get<string>(
+    `/mod/assign/view.php?id=${assignmentId}`,
+  );
   const html = response.data;
   if (isLoginHtml(html)) {
     throw new Error("Session expired while fetching assignment details");
@@ -380,27 +461,31 @@ export const fetchAssignmentDetails = async (
   const doc = parseHtml(html);
 
   const { courseId, courseName } = extractCourseCrumb(doc);
-  const assignmentName = normalizeText(getText(querySelector(doc, "h1"))) || `Assignment ${assignmentId}`;
+  const assignmentName =
+    normalizeText(getText(querySelector(doc, "h1"))) ||
+    `Assignment ${assignmentId}`;
   const description = extractDescription(doc);
   // Extract resource links inside assignment description
-  const resourceLinks = querySelectorAll(
-    doc,
-    ".activity-description a[href]"
-  );
+  const resourceLinks = querySelectorAll(doc, ".activity-description a[href]");
 
   const resources = resourceLinks
-  .map((link, index) => {
-    const href = getAttr(link, "href");
-    if (!href) return null;
+    .map((link, index) => {
+      const href = getAttr(link, "href");
+      if (!href) return null;
 
-    return {
-      id: `resource-${index + 1}`,
-      name: normalizeText(getText(link)) || `File ${index + 1}`,
-      url: toAbsoluteLmsUrl(href),
-    };
-  })
-  .filter((item): item is { id: string; name: string; url: string } => Boolean(item));
-  const dates = parseActivityDates(doc);
+      return {
+        id: `resource-${index + 1}`,
+        name: normalizeText(getText(link)) || `File ${index + 1}`,
+        url: toAbsoluteLmsUrl(href),
+      };
+    })
+    .filter((item): item is { id: string; name: string; url: string } =>
+      Boolean(item),
+    );
+  const dates = {
+    ...parseActivityDatesFromStatusTables(doc),
+    ...parseActivityDates(doc),
+  };
 
   const statusTableRoot =
     querySelector(doc, ".submissionstatustable") ??
@@ -456,12 +541,17 @@ export const startAssignmentEditSession = async (
 
   const { courseId } = extractCourseCrumb(doc);
 
-  const forms = querySelectorAll(doc, "form[action*='/mod/assign/view.php'][method='post']");
+  const forms = querySelectorAll(
+    doc,
+    "form[action*='/mod/assign/view.php'][method='post']",
+  );
   const form =
     forms.find((candidate) => {
       const actionInput = querySelector(candidate, "input[name='action']");
       return getAttr(actionInput, "value") === "savesubmission";
-    }) ?? forms[0] ?? null;
+    }) ??
+    forms[0] ??
+    null;
 
   if (!form) {
     throw new Error("Could not find assignment submission form");
@@ -505,7 +595,9 @@ export const startAssignmentEditSession = async (
     hiddenFields,
     supportsFileSubmission: Boolean(hiddenFields.files_filemanager),
     supportsOnlineTextSubmission: Boolean(onlineTextFieldName),
-    onlineTextDraftHtml: onlineTextField ? getFieldValue(onlineTextField) : null,
+    onlineTextDraftHtml: onlineTextField
+      ? getFieldValue(onlineTextField)
+      : null,
     onlineTextFieldName,
     acceptedFileTypes,
     maxFiles: parseNumberValue(fileManagerConfig?.maxfiles),
@@ -649,7 +741,9 @@ export const submitAssignment = async (
   const files = payload.files ?? [];
   let draftItemIdToSubmit = session.draftItemId;
   const maxFilesLimit =
-    session.maxFiles !== null && session.maxFiles >= 0 ? session.maxFiles : null;
+    session.maxFiles !== null && session.maxFiles >= 0
+      ? session.maxFiles
+      : null;
   let uploadSession: AssignmentEditSession = session;
   if (files.length > 0) {
     if (!session.supportsFileSubmission || !session.draftItemId) {
@@ -670,9 +764,13 @@ export const submitAssignment = async (
 
     for (const file of files) {
       try {
-        const uploadedDraft = await uploadAssignmentDraftFile(uploadSession, file, {
-          onProgress: options?.onProgress,
-        });
+        const uploadedDraft = await uploadAssignmentDraftFile(
+          uploadSession,
+          file,
+          {
+            onProgress: options?.onProgress,
+          },
+        );
         draftItemIdToSubmit = uploadedDraft.itemId;
         uploadSession = {
           ...uploadSession,
@@ -699,7 +797,8 @@ export const submitAssignment = async (
   }
 
   if (session.supportsOnlineTextSubmission && session.onlineTextFieldName) {
-    const onlineText = payload.onlineTextHtml ?? session.onlineTextDraftHtml ?? "";
+    const onlineText =
+      payload.onlineTextHtml ?? session.onlineTextDraftHtml ?? "";
     requestParams.set(session.onlineTextFieldName, onlineText);
 
     const textFieldMatch = session.onlineTextFieldName.match(/^(.*)\[text\]$/);
@@ -734,7 +833,9 @@ export const submitAssignment = async (
     }
 
     const doc = parseHtml(response.data);
-    const hasSubmissionTable = Boolean(querySelector(doc, ".submissionstatustable"));
+    const hasSubmissionTable = Boolean(
+      querySelector(doc, ".submissionstatustable"),
+    );
     if (!hasSubmissionTable) {
       return {
         success: false,
