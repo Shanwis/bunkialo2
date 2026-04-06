@@ -1,7 +1,4 @@
-import {
-  createLmsSession,
-  loadEnvFromRoot,
-} from "./utils/lms-session.mjs";
+import { createLmsSession, loadEnvFromRoot } from "./utils/lms-session.mjs";
 
 const DEFAULT_BASE_URL = "https://lmsug24.iiitkottayam.ac.in";
 const ASSIGNMENT_IDS = [4155, 4250];
@@ -13,7 +10,10 @@ const session = createLmsSession({
   baseUrl: process.env.LMS_BASE_URL || DEFAULT_BASE_URL,
 });
 
-const normalizeText = (value) => String(value || "").replace(/\s+/g, " ").trim();
+const normalizeText = (value) =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const extractJsonObjectAfterMarker = (input, marker) => {
   const markerIndex = input.indexOf(marker);
@@ -62,7 +62,8 @@ const extractJsonObjectAfterMarker = (input, marker) => {
 
 const parseAssignmentView = (html, assignmentId) => {
   const $ = cheerio.load(html);
-  const title = normalizeText($("h1").first().text()) || `Assignment ${assignmentId}`;
+  const title =
+    normalizeText($("h1").first().text()) || `Assignment ${assignmentId}`;
   const breadcrumbItems = $("nav[aria-label='Navigation bar'] li")
     .map((_idx, el) => normalizeText($(el).text()))
     .get()
@@ -80,16 +81,42 @@ const parseAssignmentView = (html, assignmentId) => {
 
     if (key.startsWith("opened")) dates.opened = value;
     if (key.startsWith("due")) dates.due = value;
-    if (key.startsWith("cut-off") || key.startsWith("cutoff")) dates.cutoff = value;
+    if (key.startsWith("cut-off") || key.startsWith("cutoff"))
+      dates.cutoff = value;
     if (key.startsWith("allow submissions from")) dates.allowFrom = value;
   });
 
   const statusRows = {};
+  const statusDateMeta = {};
   $(".submissionstatustable tr, table.generaltable tr").each((_idx, row) => {
-    const key = normalizeText($(row).find("th").first().text()).toLowerCase();
-    const value = normalizeText($(row).find("td").first().text());
+    let key = normalizeText($(row).find("th").first().text());
+    let valueCell = $(row).find("td").first();
+
+    if (!key || valueCell.length === 0) {
+      const cells = $(row).find("td");
+      if (cells.length >= 2) {
+        key = normalizeText(cells.first().text());
+        valueCell = cells.last();
+      }
+    }
+
+    const value = normalizeText(valueCell.text());
     if (!key || !value) return;
-    statusRows[key] = value;
+
+    const normalizedKey = key.toLowerCase();
+    statusRows[normalizedKey] = value;
+
+    const dataTimestamp =
+      valueCell.find("[data-timestamp]").first().attr("data-timestamp") || null;
+    const dataTime =
+      valueCell.find("[data-time]").first().attr("data-time") || null;
+    const datetime =
+      valueCell.find("time[datetime]").first().attr("datetime") || null;
+    statusDateMeta[normalizedKey] = {
+      dataTimestamp,
+      dataTime,
+      datetime,
+    };
   });
 
   const description = normalizeText(
@@ -111,6 +138,7 @@ const parseAssignmentView = (html, assignmentId) => {
     submissionStatusText: statusRows["submission status"] || null,
     gradingStatusText: statusRows["grading status"] || null,
     timeRemainingText: statusRows["time remaining"] || null,
+    statusDateMeta,
   };
 };
 
@@ -180,19 +208,28 @@ const parseEditPage = (html) => {
   );
 
   const onlineTextFieldName =
-    form.find("textarea[name*='onlinetext'][name$='[text]']").first().attr("name") ||
+    form
+      .find("textarea[name*='onlinetext'][name$='[text]']")
+      .first()
+      .attr("name") ||
     form.find("textarea[name$='[text]']").first().attr("name") ||
     null;
 
   return {
     hasForm: true,
-    draftItemId: hiddenFields.files_filemanager || (config?.itemid ? String(config.itemid) : null),
+    draftItemId:
+      hiddenFields.files_filemanager ||
+      (config?.itemid ? String(config.itemid) : null),
     sesskey: hiddenFields.sesskey || null,
     supportsFileSubmission: Boolean(hiddenFields.files_filemanager),
     supportsOnlineTextSubmission: Boolean(onlineTextFieldName),
     acceptedFileTypes,
-    maxFiles: Number.isFinite(Number(config?.maxfiles)) ? Number(config.maxfiles) : null,
-    maxBytes: Number.isFinite(Number(config?.maxbytes)) ? Number(config.maxbytes) : null,
+    maxFiles: Number.isFinite(Number(config?.maxfiles))
+      ? Number(config.maxfiles)
+      : null,
+    maxBytes: Number.isFinite(Number(config?.maxbytes))
+      ? Number(config.maxbytes)
+      : null,
     uploadRepositoryId,
     hiddenFieldCount: Object.keys(hiddenFields).length,
   };
@@ -228,16 +265,35 @@ const main = async () => {
     console.log(`  Opened: ${viewData.openedAtText || "N/A"}`);
     console.log(`  Due: ${viewData.dueAtText || "N/A"}`);
     console.log(`  Description length: ${viewData.descriptionLength}`);
-    console.log(`  Submission status: ${viewData.submissionStatusText || "N/A"}`);
+    console.log(
+      `  Submission status: ${viewData.submissionStatusText || "N/A"}`,
+    );
     console.log(`  Grading status: ${viewData.gradingStatusText || "N/A"}`);
     console.log(`  Time remaining: ${viewData.timeRemainingText || "N/A"}`);
+    if (
+      viewData.statusDateMeta.opened ||
+      viewData.statusDateMeta["opening time"]
+    ) {
+      const openedMeta =
+        viewData.statusDateMeta.opened ||
+        viewData.statusDateMeta["opening time"];
+      console.log(
+        `  Opened meta: data-timestamp=${openedMeta.dataTimestamp || "N/A"}, data-time=${openedMeta.dataTime || "N/A"}, datetime=${openedMeta.datetime || "N/A"}`,
+      );
+    }
     console.log(`  Supports file submit: ${editData.supportsFileSubmission}`);
-    console.log(`  Supports online text: ${editData.supportsOnlineTextSubmission}`);
+    console.log(
+      `  Supports online text: ${editData.supportsOnlineTextSubmission}`,
+    );
     console.log(`  Draft item id: ${editData.draftItemId || "N/A"}`);
-    console.log(`  Accepted file types: ${editData.acceptedFileTypes.join(", ") || "any"}`);
+    console.log(
+      `  Accepted file types: ${editData.acceptedFileTypes.join(", ") || "any"}`,
+    );
     console.log(`  Max files: ${editData.maxFiles ?? "N/A"}`);
     console.log(`  Max bytes: ${editData.maxBytes ?? "N/A"}`);
-    console.log(`  Upload repository id: ${editData.uploadRepositoryId || "N/A"}`);
+    console.log(
+      `  Upload repository id: ${editData.uploadRepositoryId || "N/A"}`,
+    );
   }
 
   console.log("\nDone.");

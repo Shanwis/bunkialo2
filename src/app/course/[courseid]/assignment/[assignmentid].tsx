@@ -130,22 +130,43 @@ export default function AssignmentDetailScreen() {
   const [onlineText, setOnlineText] = useState("");
   const [files, setFiles] = useState<AssignmentUploadLocalFile[]>([]);
   const [hasSeededOnlineText, setHasSeededOnlineText] = useState(false);
+  const [hasForcedDateRefresh, setHasForcedDateRefresh] = useState(false);
 
   const [downloadingUrlSet, setDownloadingUrlSet] = useState<
     Record<string, boolean>
   >({});
 
   useEffect(() => {
+    setHasForcedDateRefresh(false);
+  }, [assignmentId]);
+
+  useEffect(() => {
     if (!assignmentId || !hasHydrated) return;
     const stale =
       !entry || Date.now() - entry.lastSyncTime > ASSIGNMENT_STALE_MS;
-    if (!stale) return;
+    const hasMissingDates = Boolean(
+      entry && (entry.data.openedAt === null || entry.data.dueAt === null),
+    );
+    const shouldForceForMissingDates = hasMissingDates && !hasForcedDateRefresh;
+    if (!stale && !shouldForceForMissingDates) return;
 
     const task = InteractionManager.runAfterInteractions(() => {
-      void fetchAssignmentDetails(assignmentId, { silent: Boolean(entry) });
+      void fetchAssignmentDetails(assignmentId, {
+        silent: Boolean(entry),
+        force: shouldForceForMissingDates,
+      });
+      if (shouldForceForMissingDates) {
+        setHasForcedDateRefresh(true);
+      }
     });
     return () => task.cancel();
-  }, [assignmentId, entry, fetchAssignmentDetails, hasHydrated]);
+  }, [
+    assignmentId,
+    entry,
+    fetchAssignmentDetails,
+    hasForcedDateRefresh,
+    hasHydrated,
+  ]);
 
   useEffect(() => {
     if (!assignmentId || !details?.canEditSubmission) return;

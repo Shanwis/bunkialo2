@@ -23,6 +23,7 @@ import {
 } from "@/utils/html-parser";
 import { getOuterHTML } from "domutils";
 import type { Document, Element } from "domhandler";
+import { isValid, parse } from "date-fns";
 import { api } from "./api";
 
 type FileManagerRepository = {
@@ -64,8 +65,31 @@ const toAbsoluteLmsUrl = (url: string): string => {
 
 const parseTimestamp = (value: string | null): number | null => {
   if (!value) return null;
+
   const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? null : parsed;
+  if (!Number.isNaN(parsed)) return parsed;
+
+  const normalized = normalizeText(value);
+  const reference = new Date();
+  const knownFormats = [
+    "EEEE, d MMMM yyyy, h:mm a",
+    "EEEE, dd MMMM yyyy, h:mm a",
+    "d MMMM yyyy, h:mm a",
+    "dd MMMM yyyy, h:mm a",
+    "EEEE, d MMM yyyy, h:mm a",
+    "EEEE, dd MMM yyyy, h:mm a",
+    "d MMM yyyy, h:mm a",
+    "dd MMM yyyy, h:mm a",
+  ] as const;
+
+  for (const format of knownFormats) {
+    const candidate = parse(normalized, format, reference);
+    if (isValid(candidate)) {
+      return candidate.getTime();
+    }
+  }
+
+  return null;
 };
 
 const parseTimestampFromDateText = (value: string | null): number | null => {
@@ -78,7 +102,21 @@ const parseTimestampFromDateText = (value: string | null): number | null => {
   if (separatorIndex <= 0) return null;
 
   const stripped = normalizeText(value.slice(separatorIndex + 1));
-  return parseTimestamp(stripped);
+  const strippedDirect = parseTimestamp(stripped);
+  if (strippedDirect) return strippedDirect;
+
+  const withoutTrailingHint = stripped.replace(/\s*\([^)]*\)\s*$/u, "");
+  return parseTimestamp(withoutTrailingHint);
+};
+
+const parseUnixTimestamp = (
+  value: string | null,
+  options?: { seconds?: boolean },
+): number | null => {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return options?.seconds ? parsed * 1000 : parsed;
 };
 
 const resolveAssignmentDateKey = (rawKey: string): AssignmentDateKey | null => {
@@ -232,17 +270,69 @@ const getAcceptedFileTypes = (
   return Array.from(new Set(normalized));
 };
 
+const getTableRowLabelAndValue = (
+  row: Element,
+): { label: string; value: string; valueCell: Element | null } | null => {
+  const headerCell = querySelector(row, "th");
+  const valueCellFromHeader = querySelector(row, "td");
+
+  if (headerCell && valueCellFromHeader) {
+    const label = normalizeText(getText(headerCell));
+    const value = normalizeText(getText(valueCellFromHeader));
+    if (!label || !value) return null;
+    return { label, value, valueCell: valueCellFromHeader };
+  }
+
+  const cells = querySelectorAll(row, "td");
+  if (cells.length < 2) return null;
+
+  const label = normalizeText(getText(cells[0] ?? null));
+  const valueCell = cells[cells.length - 1] ?? null;
+  const value = normalizeText(getText(valueCell));
+  if (!label || !value) return null;
+
+  return { label, value, valueCell };
+};
+
+const parseTimestampFromCell = (
+  valueCell: Element | null,
+  fallbackText: string,
+): number | null => {
+  const fromDataTimestampNode = valueCell
+    ? querySelector(valueCell, "[data-timestamp]")
+    : null;
+  const fromDataTimestamp = parseUnixTimestamp(
+    getAttr(fromDataTimestampNode, "data-timestamp"),
+    { seconds: true },
+  );
+  if (fromDataTimestamp) return fromDataTimestamp;
+
+  const fromDataTimeNode = valueCell
+    ? querySelector(valueCell, "[data-time]")
+    : null;
+  const fromDataTime = parseUnixTimestamp(
+    getAttr(fromDataTimeNode, "data-time"),
+  );
+  if (fromDataTime) return fromDataTime;
+
+  const datetimeNode = valueCell
+    ? querySelector(valueCell, "time[datetime]")
+    : null;
+  const datetimeAttr = getAttr(datetimeNode, "datetime");
+  const fromDatetime = parseTimestamp(datetimeAttr);
+  if (fromDatetime) return fromDatetime;
+
+  return parseTimestampFromDateText(fallbackText);
+};
+
 const parseSubmissionStatusRows = (root: Element): Record<string, string> => {
   const rows = querySelectorAll(root, "tr");
   const map: Record<string, string> = {};
 
   for (const row of rows) {
-    const label = normalizeText(
-      getText(querySelector(row, "th")),
-    ).toLowerCase();
-    const value = normalizeText(getText(querySelector(row, "td")));
-    if (!label || !value) continue;
-    map[label] = value;
+    const pair = getTableRowLabelAndValue(row);
+    if (!pair) continue;
+    map[pair.label.toLowerCase()] = pair.value;
   }
 
   return map;
@@ -284,14 +374,13 @@ const parseActivityDatesFromStatusTables = (
   );
 
   for (const row of rows) {
-    const label = normalizeText(getText(querySelector(row, "th")));
-    const value = normalizeText(getText(querySelector(row, "td")));
-    if (!label || !value) continue;
+    const pair = getTableRowLabelAndValue(row);
+    if (!pair) continue;
 
-    const key = resolveAssignmentDateKey(label);
+    const key = resolveAssignmentDateKey(pair.label);
     if (!key) continue;
 
-    const timestamp = parseTimestampFromDateText(value);
+    const timestamp = parseTimestampFromCell(pair.valueCell, pair.value);
     if (!timestamp) continue;
 
     values[key] = timestamp;
