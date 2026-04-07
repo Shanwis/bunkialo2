@@ -45,6 +45,7 @@ export type FeedbackAutofillReport = {
   formsAttempted: number;
   formsSubmitted: number;
   formsSkippedNoQuestions: number;
+  formsSkippedNotAccessible: number;
   radioGroupsFilled: number;
   checkboxGroupsFilled: number;
   textFieldsFilled: number;
@@ -81,24 +82,66 @@ const isDisabledField = (node: Element): boolean => {
   return getAttr(node, "disabled") !== null;
 };
 
-const collectFeedbackLinks = (html: string): string[] => {
+const collectFeedbackLinks = (html: string, courseId: string): string[] => {
   const doc = parseHtml(html);
   const links = querySelectorAll(doc, "a[href]")
     .map((node) => {
       const href = getAttr(node, "href") || "";
-      const label = getText(node).toLowerCase();
       return {
         href: toAbsoluteUrl(href),
-        label,
       };
     })
-    .filter(
-      (entry) =>
-        /\/mod\/feedback\/(view|complete)\.php\?id=\d+/i.test(entry.href) ||
-        (/feedback/i.test(entry.label) && /\/mod\//i.test(entry.href)),
+    .filter((entry) =>
+      /\/mod\/feedback\/(view|complete)\.php\?id=\d+/i.test(entry.href),
     )
+    .filter((entry) => {
+      const linkCourseMatch = entry.href.match(/[?&]courseid=(\d+)/i);
+      if (!linkCourseMatch?.[1]) return true;
+      return linkCourseMatch[1] === courseId;
+    })
     .map((entry) => entry.href);
   return Array.from(new Set(links));
+};
+
+const isNotFoundError = (error: unknown): boolean => {
+  if (!error) return false;
+
+  if (typeof error === "object") {
+    const candidate = error as {
+      response?: {
+        status?: number;
+      };
+      status?: number;
+      message?: string;
+    };
+
+    if (candidate.response?.status === 404 || candidate.status === 404) {
+      return true;
+    }
+
+    if (
+      typeof candidate.message === "string" &&
+      /status\s*code\s*404|\b404\b/i.test(candidate.message)
+    ) {
+      return true;
+    }
+  }
+
+  if (typeof error === "string") {
+    return /status\s*code\s*404|\b404\b/i.test(error);
+  }
+
+  return false;
+};
+
+const isEnrollmentOptionsPage = (html: string): boolean => {
+  const normalized = html.toLowerCase();
+  return (
+    normalized.includes("enrolment options") ||
+    normalized.includes("enrollment options") ||
+    normalized.includes("you cannot enrol yourself") ||
+    normalized.includes("you cannot enroll yourself")
+  );
 };
 
 const appendHiddenFields = (form: Element, params: URLSearchParams) => {
@@ -426,6 +469,7 @@ export const runLmsFeedbackAutofill = async (
     formsAttempted: 0,
     formsSubmitted: 0,
     formsSkippedNoQuestions: 0,
+    formsSkippedNotAccessible: 0,
     radioGroupsFilled: 0,
     checkboxGroupsFilled: 0,
     textFieldsFilled: 0,
@@ -504,9 +548,15 @@ export const runLmsFeedbackAutofill = async (
       if (isLoginHtml(coursePage.data)) {
         throw new Error("Session expired while loading course page");
       }
+      if (isEnrollmentOptionsPage(coursePage.data)) {
+        debug.scraper(
+          `[feedback-autofill] Skipping not-enrolled course page ${entry.url}`,
+        );
+        return;
+      }
 
       report.coursesProcessed += 1;
-      const feedbackLinks = collectFeedbackLinks(coursePage.data);
+      const feedbackLinks = collectFeedbackLinks(coursePage.data, courseId);
       report.feedbackLinksDiscovered += feedbackLinks.length;
 
       for (const feedbackUrl of feedbackLinks) {
@@ -572,12 +622,26 @@ export const runLmsFeedbackAutofill = async (
             }
           }
         } catch (error) {
+          if (isNotFoundError(error)) {
+            report.formsSkippedNotAccessible += 1;
+            debug.scraper(
+              `[feedback-autofill] Skipping inaccessible feedback ${feedbackUrl}`,
+            );
+            continue;
+          }
           const message =
             error instanceof Error ? error.message : String(error);
           report.errors.push(`${feedbackUrl}: ${message}`);
         }
       }
     } catch (error) {
+      if (isNotFoundError(error)) {
+        report.formsSkippedNotAccessible += 1;
+        debug.scraper(
+          `[feedback-autofill] Skipping inaccessible course ${entry.url}`,
+        );
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       report.errors.push(`${entry.url}: ${message}`);
     } finally {

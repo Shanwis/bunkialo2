@@ -140,7 +140,7 @@ export function NoticePopup() {
         });
         setLastReport(report);
 
-        const baseMessage = `Done: ${report.formsSubmitted} submitted, ${report.formsAttempted} attempted (${report.feedbackFormsVisited} forms seen, ${report.formsSkippedNoQuestions} already done).`;
+        const baseMessage = `Done: ${report.formsSubmitted} submitted, ${report.formsAttempted} attempted (${report.feedbackFormsVisited} forms seen, ${report.formsSkippedNoQuestions} already done, ${report.formsSkippedNotAccessible} inaccessible).`;
         const extra =
           report.formsAttempted === 0
             ? ` Courses: ${report.coursesDiscovered}, feedback links: ${report.feedbackLinksDiscovered}.`
