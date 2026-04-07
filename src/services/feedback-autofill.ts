@@ -1,4 +1,8 @@
-import { checkSession, tryAutoLogin } from "@/services/auth";
+import {
+  checkSession,
+  refreshAuthSession,
+  tryAutoLogin,
+} from "@/services/auth";
 import { api, getCurrentBaseUrl } from "@/services/api";
 import { fetchCourses } from "@/services/scraper";
 import {
@@ -14,6 +18,7 @@ import type { Element } from "domhandler";
 type FeedbackAutofillOptions = {
   defaultGrade: string;
   defaultTextResponse: string;
+  courseDefaults?: Record<string, { grade: string; textResponse: string }>;
   submit?: boolean;
   parallelism?: number;
   onProgress?: (progress: FeedbackAutofillProgress) => void;
@@ -28,6 +33,8 @@ export type FeedbackAutofillProgress = {
   feedbackFormsVisited: number;
   formsAttempted: number;
   formsSubmitted: number;
+  currentCourseGrade: string;
+  currentCourseTextResponse: string;
 };
 
 export type FeedbackAutofillReport = {
@@ -368,6 +375,38 @@ const ensureAuthenticatedSession = async (): Promise<boolean> => {
   return tryAutoLogin();
 };
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const withRetries = async <T>(
+  task: () => Promise<T>,
+  contextLabel: string,
+): Promise<T> => {
+  let lastError: unknown = null;
+  const delaysMs = [600, 1400, 2800];
+
+  for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
+    try {
+      if (attempt > 0) {
+        await refreshAuthSession();
+      }
+      return await task();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      debug.scraper(
+        `[feedback-autofill] ${contextLabel} attempt ${attempt + 1} failed: ${message}`,
+      );
+      if (attempt < delaysMs.length - 1) {
+        await wait(delaysMs[attempt]);
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`${contextLabel} failed after retries`);
+};
+
 export const runLmsFeedbackAutofill = async (
   options: FeedbackAutofillOptions,
 ): Promise<FeedbackAutofillReport> => {
@@ -375,6 +414,7 @@ export const runLmsFeedbackAutofill = async (
     ? options.defaultGrade.trim()
     : "3";
   const defaultTextResponse = options.defaultTextResponse.trim() || "_";
+  const courseDefaults = options.courseDefaults ?? {};
   const submit = options.submit ?? true;
   const onProgress = options.onProgress;
 
@@ -412,6 +452,8 @@ export const runLmsFeedbackAutofill = async (
     stage: FeedbackAutofillProgress["stage"],
     courseIndex: number,
     courseTitle: string,
+    currentCourseGrade: string,
+    currentCourseTextResponse: string,
   ) => {
     onProgress?.({
       stage,
@@ -422,10 +464,12 @@ export const runLmsFeedbackAutofill = async (
       feedbackFormsVisited: report.feedbackFormsVisited,
       formsAttempted: report.formsAttempted,
       formsSubmitted: report.formsSubmitted,
+      currentCourseGrade,
+      currentCourseTextResponse,
     });
   };
 
-  emitProgress("start", 0, "");
+  emitProgress("start", 0, "", defaultGrade, defaultTextResponse);
 
   debug.scraper(
     `Feedback autofill start: courses=${courseEntries.length}, submit=${submit}`,
@@ -442,8 +486,21 @@ export const runLmsFeedbackAutofill = async (
     entry: { title: string; url: string },
     index: number,
   ) => {
+    const courseIdMatch = entry.url.match(/[?&]id=(\d+)/);
+    const courseId = courseIdMatch?.[1] ?? "";
+    const courseDefault = courseDefaults[courseId];
+    const gradeForCourse =
+      courseDefault && /^[0-5]$/.test(courseDefault.grade)
+        ? courseDefault.grade
+        : defaultGrade;
+    const textForCourse =
+      courseDefault?.textResponse?.trim() || defaultTextResponse;
+
     try {
-      const coursePage = await api.get<string>(entry.url);
+      const coursePage = await withRetries(
+        () => api.get<string>(entry.url),
+        `load course page ${entry.url}`,
+      );
       if (isLoginHtml(coursePage.data)) {
         throw new Error("Session expired while loading course page");
       }
@@ -455,7 +512,10 @@ export const runLmsFeedbackAutofill = async (
       for (const feedbackUrl of feedbackLinks) {
         try {
           report.feedbackFormsVisited += 1;
-          const feedbackPage = await api.get<string>(feedbackUrl);
+          const feedbackPage = await withRetries(
+            () => api.get<string>(feedbackUrl),
+            `load feedback page ${feedbackUrl}`,
+          );
           if (isLoginHtml(feedbackPage.data)) {
             throw new Error("Session expired while opening feedback page");
           }
@@ -472,18 +532,25 @@ export const runLmsFeedbackAutofill = async (
           const completionPage =
             preferredCompletionUrl === feedbackUrl
               ? feedbackPage
-              : await api.get<string>(preferredCompletionUrl);
+              : await withRetries(
+                  () => api.get<string>(preferredCompletionUrl),
+                  `load completion page ${preferredCompletionUrl}`,
+                );
 
           if (isLoginHtml(completionPage.data)) {
             throw new Error("Session expired while opening feedback form");
           }
 
-          const fillResult = await submitFeedbackForm(
-            preferredCompletionUrl,
-            completionPage.data,
-            defaultGrade,
-            defaultTextResponse,
-            submit,
+          const fillResult = await withRetries(
+            () =>
+              submitFeedbackForm(
+                preferredCompletionUrl,
+                completionPage.data,
+                gradeForCourse,
+                textForCourse,
+                submit,
+              ),
+            `submit feedback form ${preferredCompletionUrl}`,
           );
 
           if (!fillResult.hadQuestions) {
@@ -514,7 +581,13 @@ export const runLmsFeedbackAutofill = async (
       const message = error instanceof Error ? error.message : String(error);
       report.errors.push(`${entry.url}: ${message}`);
     } finally {
-      emitProgress("course", index + 1, entry.title);
+      emitProgress(
+        "course",
+        index + 1,
+        entry.title,
+        gradeForCourse,
+        textForCourse,
+      );
     }
   };
 
@@ -530,7 +603,13 @@ export const runLmsFeedbackAutofill = async (
 
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-  emitProgress("done", courseEntries.length, "");
+  emitProgress(
+    "done",
+    courseEntries.length,
+    "",
+    defaultGrade,
+    defaultTextResponse,
+  );
 
   debug.scraper("Feedback autofill completed", report);
   return report;

@@ -53,7 +53,9 @@ const summarizeHtml = (html: string) => {
   return { title, snippet, hasLoginToken, hasLoginForm, hasSesskey };
 };
 
-const extractLoginError = (doc: ReturnType<typeof parseHtml>): string | null => {
+const extractLoginError = (
+  doc: ReturnType<typeof parseHtml>,
+): string | null => {
   const errorNode = querySelector(
     doc,
     ".loginerrors, .alert-danger, #loginerrormessage",
@@ -70,8 +72,7 @@ const getLoginDiagnostics = (html: string): LoginDiagnostics => {
     ".usermenu, .userloggedinas, #loggedin-user, .logininfo",
   );
   const hasLoginForm =
-    hasMatch(doc, "form#login") ||
-    hasMatch(doc, 'input[name="logintoken"]');
+    hasMatch(doc, "form#login") || hasMatch(doc, 'input[name="logintoken"]');
   const allLinks = querySelectorAll(doc, "a");
   const hasLogoutLink = allLinks.some((el) => {
     const href = getAttr(el, "href");
@@ -332,6 +333,17 @@ export const tryAutoLogin = async (): Promise<boolean> => {
     return false;
   }
   return loginSuccess;
+};
+
+export const refreshAuthSession = async (): Promise<boolean> => {
+  const credentials = await getCredentials();
+  if (!credentials) {
+    debug.auth("Cannot refresh auth session: no saved credentials");
+    return false;
+  }
+
+  debug.auth("Refreshing auth session with fresh login");
+  return login(credentials.username, credentials.password);
 };
 
 // Logout - clear session and optionally credentials

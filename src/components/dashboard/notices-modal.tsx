@@ -6,9 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { POPUP_NOTICES } from "@/data/popups";
-import { runLmsFeedbackAutofill } from "@/services/feedback-autofill";
 import { usePopupStore } from "@/stores/popup-store";
-import { Toast } from "@/components/shared/ui/molecules/toast";
 
 interface NoticesModalProps {
   visible: boolean;
@@ -19,43 +17,21 @@ export function NoticesModal({ visible, onClose }: NoticesModalProps) {
   const isDark = useColorScheme() === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
-  const defaultGrade = usePopupStore((state) => state.feedbackDefaultGrade);
-  const defaultText = usePopupStore(
-    (state) => state.feedbackDefaultTextResponse,
-  );
+  const markAsUnseen = usePopupStore((state) => state.markAsUnseen);
   const [runningNoticeId, setRunningNoticeId] = React.useState<string | null>(
     null,
   );
 
   const runNoticeAction = React.useCallback(
-    async (noticeId: string) => {
+    (noticeId: string) => {
       setRunningNoticeId(noticeId);
-      try {
-        Toast.show("Running LMS feedback autofill...", { type: "info" });
-        const report = await runLmsFeedbackAutofill({
-          defaultGrade,
-          defaultTextResponse: defaultText,
-          submit: true,
-          parallelism: 4,
-        });
-        const baseMessage = `Done: ${report.formsSubmitted} submitted, ${report.formsAttempted} attempted (${report.feedbackFormsVisited} forms seen, ${report.formsSkippedNoQuestions} already done).`;
-        const extra =
-          report.formsAttempted === 0
-            ? ` Courses: ${report.coursesDiscovered}, feedback links: ${report.feedbackLinksDiscovered}.`
-            : "";
-        Toast.show(`${baseMessage}${extra}`, {
-          type: report.errors.length > 0 ? "warning" : "success",
-        });
-        if (report.errors.length > 0) {
-          Toast.show(`Autofill note: ${report.errors[0]}`, { type: "warning" });
-        }
-      } catch {
-        Toast.show("Could not run feedback autofill", { type: "error" });
-      } finally {
+      markAsUnseen(noticeId);
+      onClose();
+      setTimeout(() => {
         setRunningNoticeId(null);
-      }
+      }, 120);
     },
-    [defaultGrade, defaultText],
+    [markAsUnseen, onClose],
   );
 
   // Sort notices by newest first
@@ -200,7 +176,7 @@ export function NoticesModal({ visible, onClose }: NoticesModalProps) {
                         style={{ color: Colors.white }}
                       >
                         {runningNoticeId === notice.id
-                          ? "Running..."
+                          ? "Opening..."
                           : "Retry Autofill"}
                       </Text>
                     </Pressable>

@@ -9,6 +9,7 @@ import {
   Animated,
   Modal,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -20,6 +21,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { POPUP_NOTICES } from "@/data/popups";
 import type { FeedbackAutofillReport } from "@/services/feedback-autofill";
 import { runLmsFeedbackAutofill } from "@/services/feedback-autofill";
+import { useAttendanceStore } from "@/stores/attendance-store";
 import { usePopupStore } from "@/stores/popup-store";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -30,22 +32,16 @@ export function NoticePopup() {
   const hasHydrated = usePopupStore((state) => state.hasHydrated);
   const seenPopupIds = usePopupStore((state) => state.seenPopupIds);
   const markAsSeen = usePopupStore((state) => state.markAsSeen);
-  const storedDefaultGrade = usePopupStore(
-    (state) => state.feedbackDefaultGrade,
+  const feedbackCourseDefaults = usePopupStore(
+    (state) => state.feedbackCourseDefaults,
   );
-  const storedDefaultTextResponse = usePopupStore(
-    (state) => state.feedbackDefaultTextResponse,
+  const setCourseFeedbackAutofillDefault = usePopupStore(
+    (state) => state.setCourseFeedbackAutofillDefault,
   );
-  const setFeedbackAutofillDefaults = usePopupStore(
-    (state) => state.setFeedbackAutofillDefaults,
-  );
+  const attendanceCourses = useAttendanceStore((state) => state.courses);
 
   const [currentPopup, setCurrentPopup] = useState<PopupNotice | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [gradeInput, setGradeInput] = useState(storedDefaultGrade);
-  const [textResponseInput, setTextResponseInput] = useState(
-    storedDefaultTextResponse,
-  );
   const [isRunningAutofill, setIsRunningAutofill] = useState(false);
   const [liveProgress, setLiveProgress] = useState("");
   const [lastReport, setLastReport] = useState<FeedbackAutofillReport | null>(
@@ -98,11 +94,27 @@ export function NoticePopup() {
 
     if (currentPopup.ctaAction === "run-lms-feedback-autofill") {
       try {
-        const gradeValue = gradeInput.trim();
-        const safeGrade = /^[0-5]$/.test(gradeValue) ? gradeValue : "3";
-        const safeTextResponse = textResponseInput.trim() || "_";
+        const preparedCourseDefaults: Record<
+          string,
+          { grade: string; textResponse: string }
+        > = { ...feedbackCourseDefaults };
 
-        setFeedbackAutofillDefaults(safeGrade, safeTextResponse);
+        for (const course of attendanceCourses) {
+          const existing = feedbackCourseDefaults[course.courseId];
+          const grade = /^[0-5]$/.test(existing?.grade ?? "")
+            ? (existing?.grade ?? "3")
+            : "3";
+          const textResponse = existing?.textResponse?.trim() || "_";
+          preparedCourseDefaults[course.courseId] = {
+            grade,
+            textResponse,
+          };
+          setCourseFeedbackAutofillDefault(
+            course.courseId,
+            grade,
+            textResponse,
+          );
+        }
 
         setIsRunningAutofill(true);
         setLiveProgress("Starting... This may take a bit for all courses.");
@@ -111,9 +123,10 @@ export function NoticePopup() {
         });
 
         const report = await runLmsFeedbackAutofill({
-          defaultGrade: safeGrade,
-          defaultTextResponse: safeTextResponse,
+          defaultGrade: "3",
+          defaultTextResponse: "_",
           submit: true,
+          courseDefaults: preparedCourseDefaults,
           parallelism: 4,
           onProgress: (progress) => {
             const message =
@@ -147,11 +160,11 @@ export function NoticePopup() {
 
     animateOut();
   }, [
+    attendanceCourses,
     animateOut,
     currentPopup,
-    gradeInput,
-    setFeedbackAutofillDefaults,
-    textResponseInput,
+    feedbackCourseDefaults,
+    setCourseFeedbackAutofillDefault,
   ]);
 
   useEffect(() => {
@@ -180,13 +193,18 @@ export function NoticePopup() {
 
   useEffect(() => {
     if (!modalVisible || !currentPopup?.ctaAction) return;
-    setGradeInput(storedDefaultGrade);
-    setTextResponseInput(storedDefaultTextResponse);
+    for (const course of attendanceCourses) {
+      const existing = feedbackCourseDefaults[course.courseId];
+      if (!existing) {
+        setCourseFeedbackAutofillDefault(course.courseId, "3", "_");
+      }
+    }
   }, [
+    attendanceCourses,
     currentPopup?.ctaAction,
+    feedbackCourseDefaults,
     modalVisible,
-    storedDefaultGrade,
-    storedDefaultTextResponse,
+    setCourseFeedbackAutofillDefault,
   ]);
 
   const ctaHidden = isRunningAutofill;
@@ -257,7 +275,7 @@ export function NoticePopup() {
             </View>
 
             <Text
-              className="mb-6 text-[15px] leading-6"
+              className="mb-4 text-[15px] leading-6"
               style={{ color: theme.textSecondary }}
             >
               {currentPopup.description}
@@ -269,43 +287,79 @@ export function NoticePopup() {
                   className="text-[12px] font-semibold"
                   style={{ color: theme.textSecondary }}
                 >
-                  Default grade (0-5)
+                  Per-course defaults (grade 0-5 + text)
                 </Text>
-                <TextInput
-                  value={gradeInput}
-                  onChangeText={setGradeInput}
-                  placeholder="3"
-                  placeholderTextColor={theme.textSecondary}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  returnKeyType="done"
-                  className="rounded-xl border px-3 py-2.5 text-[14px]"
-                  style={{
-                    borderColor: theme.border,
-                    color: theme.text,
-                    backgroundColor: theme.backgroundSecondary,
-                  }}
-                />
 
-                <Text
-                  className="text-[12px] font-semibold"
-                  style={{ color: theme.textSecondary }}
+                <ScrollView
+                  className="max-h-[250px]"
+                  contentContainerStyle={{ paddingBottom: 4 }}
+                  keyboardShouldPersistTaps="always"
+                  nestedScrollEnabled
                 >
-                  Default text response
-                </Text>
-                <TextInput
-                  value={textResponseInput}
-                  onChangeText={setTextResponseInput}
-                  placeholder="_"
-                  placeholderTextColor={theme.textSecondary}
-                  returnKeyType="done"
-                  className="rounded-xl border px-3 py-2.5 text-[14px]"
-                  style={{
-                    borderColor: theme.border,
-                    color: theme.text,
-                    backgroundColor: theme.backgroundSecondary,
-                  }}
-                />
+                  {attendanceCourses.map((course) => {
+                    const coursePref = feedbackCourseDefaults[
+                      course.courseId
+                    ] ?? {
+                      grade: "3",
+                      textResponse: "_",
+                    };
+
+                    return (
+                      <View key={course.courseId} className="mt-2 gap-1">
+                        <Text
+                          className="text-[12px] font-semibold"
+                          style={{ color: theme.textSecondary }}
+                          numberOfLines={1}
+                        >
+                          {course.courseName}
+                        </Text>
+                        <View className="flex-row gap-2">
+                          <TextInput
+                            value={coursePref.grade}
+                            onChangeText={(value) =>
+                              setCourseFeedbackAutofillDefault(
+                                course.courseId,
+                                value,
+                                coursePref.textResponse,
+                              )
+                            }
+                            placeholder="3"
+                            placeholderTextColor={theme.textSecondary}
+                            keyboardType="number-pad"
+                            maxLength={1}
+                            returnKeyType="done"
+                            className="w-16 rounded-xl border px-2 py-2.5 text-center text-[14px] font-semibold"
+                            style={{
+                              borderColor: theme.border,
+                              backgroundColor: theme.backgroundSecondary,
+                              color: theme.text,
+                            }}
+                          />
+                          <TextInput
+                            value={coursePref.textResponse}
+                            onChangeText={(value) =>
+                              setCourseFeedbackAutofillDefault(
+                                course.courseId,
+                                coursePref.grade,
+                                value,
+                              )
+                            }
+                            placeholder="_"
+                            placeholderTextColor={theme.textSecondary}
+                            returnKeyType="done"
+                            blurOnSubmit
+                            className="flex-1 rounded-xl border px-3 py-2.5 text-[14px]"
+                            style={{
+                              borderColor: theme.border,
+                              color: theme.text,
+                              backgroundColor: theme.backgroundSecondary,
+                            }}
+                          />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
               </View>
             )}
 
