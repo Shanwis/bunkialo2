@@ -36,6 +36,7 @@ export function NoticesModal({ visible, onClose }: NoticesModalProps) {
           defaultGrade,
           defaultTextResponse: defaultText,
           submit: true,
+          parallelism: 4,
         });
         const baseMessage = `Done: ${report.formsSubmitted} submitted, ${report.formsAttempted} attempted (${report.feedbackFormsVisited} forms seen, ${report.formsSkippedNoQuestions} already done).`;
         const extra =
@@ -185,7 +186,7 @@ export function NoticesModal({ visible, onClose }: NoticesModalProps) {
                     {notice.description}
                   </Text>
 
-                  {notice.ctaAction === "copy-lms-feedback-autofill" && (
+                  {notice.ctaAction === "run-lms-feedback-autofill" && (
                     <Pressable
                       onPress={() => {
                         void runNoticeAction(notice.id);

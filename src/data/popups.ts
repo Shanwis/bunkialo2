@@ -6,13 +6,13 @@ export const POPUP_NOTICES: PopupNotice[] = [
     id: "lms-feedback-autofill-2026-04",
     title: "LMS Feedback Autofill",
     description:
-      "New helper available. Tap the CTA to run feedback autofill using your logged-in LMS session. It discovers courses automatically, fills objective answers, fills text responses, and submits.",
+      "Tap the CTA to run your lms feedback autofill using your logged-in LMS session. Ir fills the response to the default ones and auto submits.",
     timestamp: "2026-04-06T12:00:00+05:30",
     icon: "school",
     iconColor: Colors.status.warning,
     isImportant: true,
     ctaLabel: "Run Autofill",
-    ctaAction: "copy-lms-feedback-autofill",
+    ctaAction: "run-lms-feedback-autofill",
   },
   {
     id: "menu-update-2026-03",

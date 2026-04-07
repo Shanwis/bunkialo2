@@ -9,7 +9,7 @@ export type PopupIconType =
   | "school"
   | "star";
 
-export type PopupCtaAction = "copy-lms-feedback-autofill";
+export type PopupCtaAction = "run-lms-feedback-autofill";
 
 export interface PopupNotice {
   id: string;

@@ -15,6 +15,19 @@ type FeedbackAutofillOptions = {
   defaultGrade: string;
   defaultTextResponse: string;
   submit?: boolean;
+  parallelism?: number;
+  onProgress?: (progress: FeedbackAutofillProgress) => void;
+};
+
+export type FeedbackAutofillProgress = {
+  stage: "start" | "course" | "done";
+  totalCourses: number;
+  courseIndex: number;
+  courseTitle: string;
+  coursesProcessed: number;
+  feedbackFormsVisited: number;
+  formsAttempted: number;
+  formsSubmitted: number;
 };
 
 export type FeedbackAutofillReport = {
@@ -363,6 +376,7 @@ export const runLmsFeedbackAutofill = async (
     : "3";
   const defaultTextResponse = options.defaultTextResponse.trim() || "_";
   const submit = options.submit ?? true;
+  const onProgress = options.onProgress;
 
   const report: FeedbackAutofillReport = {
     coursesDiscovered: 0,
@@ -384,18 +398,52 @@ export const runLmsFeedbackAutofill = async (
   }
 
   const courses = await fetchCourses();
-  const courseLinks = Array.from(
-    new Set(courses.map((course) => toAbsoluteUrl(course.url))),
+  const courseEntries = Array.from(
+    new Map(
+      courses.map((course) => [
+        toAbsoluteUrl(course.url),
+        { title: course.name, url: toAbsoluteUrl(course.url) },
+      ]),
+    ).values(),
   );
-  report.coursesDiscovered = courseLinks.length;
+  report.coursesDiscovered = courseEntries.length;
+
+  const emitProgress = (
+    stage: FeedbackAutofillProgress["stage"],
+    courseIndex: number,
+    courseTitle: string,
+  ) => {
+    onProgress?.({
+      stage,
+      totalCourses: courseEntries.length,
+      courseIndex,
+      courseTitle,
+      coursesProcessed: report.coursesProcessed,
+      feedbackFormsVisited: report.feedbackFormsVisited,
+      formsAttempted: report.formsAttempted,
+      formsSubmitted: report.formsSubmitted,
+    });
+  };
+
+  emitProgress("start", 0, "");
 
   debug.scraper(
-    `Feedback autofill start: courses=${courseLinks.length}, submit=${submit}`,
+    `Feedback autofill start: courses=${courseEntries.length}, submit=${submit}`,
   );
 
-  for (const courseUrl of courseLinks) {
+  const workerTarget =
+    options.parallelism && options.parallelism > 0
+      ? options.parallelism
+      : courseEntries.length;
+  const workerCount = Math.max(1, Math.min(workerTarget, courseEntries.length));
+  let nextCourseIndex = 0;
+
+  const processCourse = async (
+    entry: { title: string; url: string },
+    index: number,
+  ) => {
     try {
-      const coursePage = await api.get<string>(courseUrl);
+      const coursePage = await api.get<string>(entry.url);
       if (isLoginHtml(coursePage.data)) {
         throw new Error("Session expired while loading course page");
       }
@@ -464,9 +512,25 @@ export const runLmsFeedbackAutofill = async (
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      report.errors.push(`${courseUrl}: ${message}`);
+      report.errors.push(`${entry.url}: ${message}`);
+    } finally {
+      emitProgress("course", index + 1, entry.title);
     }
-  }
+  };
+
+  const worker = async () => {
+    while (nextCourseIndex < courseEntries.length) {
+      const index = nextCourseIndex;
+      nextCourseIndex += 1;
+      const entry = courseEntries[index];
+      if (!entry) return;
+      await processCourse(entry, index);
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  emitProgress("done", courseEntries.length, "");
 
   debug.scraper("Feedback autofill completed", report);
   return report;
