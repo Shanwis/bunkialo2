@@ -6,7 +6,7 @@ export const POPUP_NOTICES: PopupNotice[] = [
     id: "lms-feedback-autofill-2026-04",
     title: "LMS Feedback Autofill",
     description:
-      "Tap the CTA to run your lms feedback autofill using your logged-in LMS session. Ir fills the response to the default ones and auto submits.",
+      "Tap the button to run your lms feedback autofill using your logged-in LMS session. Ir fills the response to the default ones and auto submits.",
     timestamp: "2026-04-06T12:00:00+05:30",
     icon: "school",
     iconColor: Colors.status.warning,
