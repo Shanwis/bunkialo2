@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+
 export type PopupIconType =
   | "notifications"
   | "warning"
@@ -11,6 +13,11 @@ export type PopupIconType =
 
 export type PopupCtaAction = "run-lms-feedback-autofill";
 
+export interface PopupCustomContentProps {
+  popup: PopupNotice;
+  onClose: () => void;
+}
+
 export interface PopupNotice {
   id: string;
   title: string;
@@ -21,4 +28,5 @@ export interface PopupNotice {
   isImportant?: boolean;
   ctaLabel?: string;
   ctaAction?: PopupCtaAction;
+  customContent?: ComponentType<PopupCustomContentProps>;
 }

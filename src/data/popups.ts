@@ -1,18 +1,19 @@
 import { Colors } from "@/constants/theme";
+import { FeedbackAutofillPopupContent } from "@/components/dashboard/popup/feedback-autofill-popup-content";
 import type { PopupNotice } from "@/types";
 
 export const POPUP_NOTICES: PopupNotice[] = [
   {
     id: "lms-feedback-autofill-2026-04",
     title: "LMS Feedback Autofill",
-    description:
-      "",
+    description: "Feedback forms should never be made mandatory",
     timestamp: "2026-04-06T12:00:00+05:30",
     icon: "school",
     iconColor: Colors.status.warning,
     isImportant: true,
     ctaLabel: "Run Autofill",
     ctaAction: "run-lms-feedback-autofill",
+    customContent: FeedbackAutofillPopupContent,
   },
   {
     id: "menu-update-2026-03",

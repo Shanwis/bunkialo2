@@ -46,12 +46,6 @@ const extractSeenPopupIds = (value: unknown): string[] | null => {
 
 interface PopupState {
   seenPopupIds: string[];
-  feedbackDefaultGrade: string;
-  feedbackDefaultTextResponse: string;
-  feedbackCourseDefaults: Record<
-    string,
-    { grade: string; textResponse: string }
-  >;
   hasHydrated: boolean;
   markAsSeen: (id: string) => void;
   markAsUnseen: (id: string) => void;
@@ -59,15 +53,6 @@ interface PopupState {
   clearSeenPopups: () => void;
   hasUnseenPopups: () => boolean;
   getUnseenPopups: () => typeof POPUP_NOTICES;
-  setFeedbackAutofillDefaults: (grade: string, textResponse: string) => void;
-  setCourseFeedbackAutofillDefault: (
-    courseId: string,
-    grade: string,
-    textResponse: string,
-  ) => void;
-  setCourseFeedbackAutofillDefaults: (
-    defaults: Record<string, { grade: string; textResponse: string }>,
-  ) => void;
   setHasHydrated: (hasHydrated: boolean) => void;
 }
 
@@ -75,9 +60,6 @@ export const usePopupStore = create<PopupState>()(
   persist(
     (set, get) => ({
       seenPopupIds: [],
-      feedbackDefaultGrade: "3",
-      feedbackDefaultTextResponse: "_",
-      feedbackCourseDefaults: {},
       hasHydrated: false,
 
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
@@ -125,52 +107,6 @@ export const usePopupStore = create<PopupState>()(
           (popup) => !seenPopupIds.includes(popup.id),
         );
       },
-
-      setFeedbackAutofillDefaults: (grade: string, textResponse: string) => {
-        const trimmedGrade = grade.trim();
-        const safeGrade = /^[0-5]$/.test(trimmedGrade) ? trimmedGrade : "3";
-        const safeText = textResponse.trim() || "_";
-
-        set({
-          feedbackDefaultGrade: safeGrade,
-          feedbackDefaultTextResponse: safeText,
-        });
-      },
-
-      setCourseFeedbackAutofillDefault: (courseId, grade, textResponse) => {
-        const id = courseId.trim();
-        if (!id) return;
-
-        const trimmedGrade = grade.trim();
-        const safeGrade = /^[0-5]$/.test(trimmedGrade) ? trimmedGrade : "3";
-        const safeText = textResponse.trim() || "_";
-
-        set((state) => ({
-          feedbackCourseDefaults: {
-            ...state.feedbackCourseDefaults,
-            [id]: { grade: safeGrade, textResponse: safeText },
-          },
-        }));
-      },
-
-      setCourseFeedbackAutofillDefaults: (defaults) => {
-        const sanitized: Record<
-          string,
-          { grade: string; textResponse: string }
-        > = {};
-
-        for (const [courseId, value] of Object.entries(defaults)) {
-          const id = courseId.trim();
-          if (!id) continue;
-
-          const gradeRaw = String(value?.grade ?? "").trim();
-          const safeGrade = /^[0-5]$/.test(gradeRaw) ? gradeRaw : "3";
-          const safeText = String(value?.textResponse ?? "").trim() || "_";
-          sanitized[id] = { grade: safeGrade, textResponse: safeText };
-        }
-
-        set({ feedbackCourseDefaults: sanitized });
-      },
     }),
     {
       name: "bunkialo-popup-storage",
@@ -199,9 +135,6 @@ export const usePopupStore = create<PopupState>()(
       })),
       partialize: (state) => ({
         seenPopupIds: state.seenPopupIds,
-        feedbackDefaultGrade: state.feedbackDefaultGrade,
-        feedbackDefaultTextResponse: state.feedbackDefaultTextResponse,
-        feedbackCourseDefaults: state.feedbackCourseDefaults,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);

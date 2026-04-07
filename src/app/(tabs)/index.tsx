@@ -2,7 +2,7 @@ import { startBackgroundRefresh } from "@/background/dashboard-background";
 import { EventCard } from "@/components/dashboard/event-card";
 import { TimelineSection } from "@/components/dashboard/timeline-section";
 import { UpNextSection } from "@/components/dashboard/up-next-section";
-import { NoticePopup } from "@/components/dashboard/notice-popup";
+import { NoticePopup } from "@/components/dashboard/popup/notice-popup";
 import { NoticesModal } from "@/components/dashboard/notices-modal";
 import { DevInfoModal } from "@/components/modals/dev-info-modal";
 import { Container } from "@/components/ui/container";
@@ -63,10 +63,8 @@ export default function DashboardScreen() {
   } = useDashboardStore();
   const fetchAttendance = useAttendanceStore((state) => state.fetchAttendance);
   const { isOffline, setOffline, username } = useAuthStore();
-  const {
-    hasHydrated: resourcesHydrated,
-    prefetchEnrolledCourseResources,
-  } = useLmsResourcesStore();
+  const { hasHydrated: resourcesHydrated, prefetchEnrolledCourseResources } =
+    useLmsResourcesStore();
   const refreshIntervalMinutes = useSettingsStore(
     (state) => state.refreshIntervalMinutes,
   );
@@ -92,11 +90,14 @@ export default function DashboardScreen() {
     isAttendanceRefreshQueued.current = true;
 
     const interactionTask = InteractionManager.runAfterInteractions(() => {
-      const cancelIdleTask = scheduleIdleTask(() => {
-        void fetchAttendance({ background: true }).finally(() => {
-          isAttendanceRefreshQueued.current = false;
-        });
-      }, { timeoutMs: 1500, fallbackDelayMs: 120 });
+      const cancelIdleTask = scheduleIdleTask(
+        () => {
+          void fetchAttendance({ background: true }).finally(() => {
+            isAttendanceRefreshQueued.current = false;
+          });
+        },
+        { timeoutMs: 1500, fallbackDelayMs: 120 },
+      );
 
       return cancelIdleTask;
     });
@@ -198,8 +199,9 @@ export default function DashboardScreen() {
         lastSyncTime !== null &&
         Date.now() - lastSyncTime > staleAfterMs;
 
-      let task: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
-        null;
+      let task: ReturnType<
+        typeof InteractionManager.runAfterInteractions
+      > | null = null;
 
       if (shouldRefreshOnFocus) {
         task = InteractionManager.runAfterInteractions(() => {
@@ -255,10 +257,10 @@ export default function DashboardScreen() {
     paddingHorizontal: 8,
     paddingVertical: 4,
   };
-  const themeIconName =
-    isDark ? "moon-outline" : "sunny-outline";
+  const themeIconName = isDark ? "moon-outline" : "sunny-outline";
 
-  const isOldBatch = username?.startsWith("2022") || username?.startsWith("2023");
+  const isOldBatch =
+    username?.startsWith("2022") || username?.startsWith("2023");
 
   const fabActions = [
     {
@@ -287,71 +289,71 @@ export default function DashboardScreen() {
     },
     ...(isOldBatch
       ? [
-        {
-          icon: "open-in-new",
-          label: "Outpass-RFID",
-          color: theme.text,
-          style: { backgroundColor: theme.backgroundSecondary },
-          labelStyle: actionLabelStyle,
-          containerStyle: actionContainerStyle,
-          onPress: () => {
-            setShowFabMenu(false);
-            Linking.openURL("https://outpass.iiitkottayam.ac.in/app");
+          {
+            icon: "open-in-new",
+            label: "Outpass-RFID",
+            color: theme.text,
+            style: { backgroundColor: theme.backgroundSecondary },
+            labelStyle: actionLabelStyle,
+            containerStyle: actionContainerStyle,
+            onPress: () => {
+              setShowFabMenu(false);
+              Linking.openURL("https://outpass.iiitkottayam.ac.in/app");
+            },
           },
-        },
-        {
-          icon: "open-in-new",
-          label: "Outpass-fingerprint",
-          color: theme.text,
-          style: { backgroundColor: theme.backgroundSecondary },
-          labelStyle: actionLabelStyle,
-          containerStyle: actionContainerStyle,
-          onPress: () => {
-            setShowFabMenu(false);
-            Linking.openURL(
-              "https://gatepassstud.iiitkottayam.ac.in/index.php",
-            );
+          {
+            icon: "open-in-new",
+            label: "Outpass-fingerprint",
+            color: theme.text,
+            style: { backgroundColor: theme.backgroundSecondary },
+            labelStyle: actionLabelStyle,
+            containerStyle: actionContainerStyle,
+            onPress: () => {
+              setShowFabMenu(false);
+              Linking.openURL(
+                "https://gatepassstud.iiitkottayam.ac.in/index.php",
+              );
+            },
           },
-        },
-        {
-          icon: "food",
-          label: "Feaston",
-          color: theme.text,
-          style: { backgroundColor: theme.backgroundSecondary },
-          labelStyle: actionLabelStyle,
-          containerStyle: actionContainerStyle,
-          onPress: () => {
-            setShowFabMenu(false);
-            Linking.openURL("https://feaston.iiitkottayam.ac.in/dashboard");
+          {
+            icon: "food",
+            label: "Feaston",
+            color: theme.text,
+            style: { backgroundColor: theme.backgroundSecondary },
+            labelStyle: actionLabelStyle,
+            containerStyle: actionContainerStyle,
+            onPress: () => {
+              setShowFabMenu(false);
+              Linking.openURL("https://feaston.iiitkottayam.ac.in/dashboard");
+            },
           },
-        },
-      ]
+        ]
       : [
-        {
-          icon: "open-in-new",
-          label: "Outpass",
-          color: theme.text,
-          style: { backgroundColor: theme.backgroundSecondary },
-          labelStyle: actionLabelStyle,
-          containerStyle: actionContainerStyle,
-          onPress: () => {
-            setShowFabMenu(false);
-            Linking.openURL("https://outpass.iiitkottayam.ac.in/app");
+          {
+            icon: "open-in-new",
+            label: "Outpass",
+            color: theme.text,
+            style: { backgroundColor: theme.backgroundSecondary },
+            labelStyle: actionLabelStyle,
+            containerStyle: actionContainerStyle,
+            onPress: () => {
+              setShowFabMenu(false);
+              Linking.openURL("https://outpass.iiitkottayam.ac.in/app");
+            },
           },
-        },
-        {
-          icon: "food",
-          label: "Feaston",
-          color: theme.text,
-          style: { backgroundColor: theme.backgroundSecondary },
-          labelStyle: actionLabelStyle,
-          containerStyle: actionContainerStyle,
-          onPress: () => {
-            setShowFabMenu(false);
-            Linking.openURL("https://feaston.iiitkottayam.ac.in/dashboard");
+          {
+            icon: "food",
+            label: "Feaston",
+            color: theme.text,
+            style: { backgroundColor: theme.backgroundSecondary },
+            labelStyle: actionLabelStyle,
+            containerStyle: actionContainerStyle,
+            onPress: () => {
+              setShowFabMenu(false);
+              Linking.openURL("https://feaston.iiitkottayam.ac.in/dashboard");
+            },
           },
-        },
-      ]),
+        ]),
     {
       icon: "calendar-month",
       label: "Academic Calendar",
@@ -381,16 +383,17 @@ export default function DashboardScreen() {
         {/* Header */}
         <View className="mb-5 flex-row items-start justify-between">
           <View className="shrink gap-1">
-            <Text className="text-[30px] font-bold tracking-tight" style={{ color: theme.text }}>
+            <Text
+              className="text-[30px] font-bold tracking-tight"
+              style={{ color: theme.text }}
+            >
               Dashboard
             </Text>
             {lastSyncTime && (
               <View
                 className="flex-row items-center gap-1 self-start rounded-full px-2 py-1"
                 style={{
-                  backgroundColor: isDark
-                    ? Colors.gray[900]
-                    : Colors.gray[100],
+                  backgroundColor: isDark ? Colors.gray[900] : Colors.gray[100],
                 }}
               >
                 <Ionicons
@@ -428,23 +431,20 @@ export default function DashboardScreen() {
                 color={theme.textSecondary}
               />
               {hasUnseenPopups && (
-                <View className="absolute right-2 top-2 h-2 w-2 rounded-full" style={{ backgroundColor: Colors.status.danger }} />
+                <View
+                  className="absolute right-2 top-2 h-2 w-2 rounded-full"
+                  style={{ backgroundColor: Colors.status.danger }}
+                />
               )}
             </Pressable>
-            <Pressable
-              onPress={() => setShowDevInfo(true)}
-              className="p-2"
-            >
+            <Pressable onPress={() => setShowDevInfo(true)} className="p-2">
               <Ionicons
                 name="information-circle-outline"
                 size={20}
                 color={theme.textSecondary}
               />
             </Pressable>
-            <Pressable
-              onPress={() => router.push("/settings")}
-              className="p-2"
-            >
+            <Pressable onPress={() => router.push("/settings")} className="p-2">
               <Ionicons
                 name="settings-outline"
                 size={20}
@@ -486,8 +486,12 @@ export default function DashboardScreen() {
                   size={19}
                   color={Colors.status.danger}
                 />
-                <Text className="text-sm font-bold uppercase tracking-wide" style={{ color: Colors.status.danger }}>
-                  {overdueEvents.length} overdue task{overdueEvents.length > 1 ? "s" : ""}
+                <Text
+                  className="text-sm font-bold uppercase tracking-wide"
+                  style={{ color: Colors.status.danger }}
+                >
+                  {overdueEvents.length} overdue task
+                  {overdueEvents.length > 1 ? "s" : ""}
                 </Text>
               </View>
               <Ionicons
@@ -510,7 +514,10 @@ export default function DashboardScreen() {
         {/* Upcoming Timeline */}
         {!isHydratingFromCache && (
           <View className="mb-6">
-            <Text className="mb-4 text-lg font-bold tracking-tight" style={{ color: theme.text }}>
+            <Text
+              className="mb-4 text-lg font-bold tracking-tight"
+              style={{ color: theme.text }}
+            >
               Upcoming
             </Text>
             <TimelineSection events={upcomingEvents} />
@@ -543,9 +550,9 @@ export default function DashboardScreen() {
         onClose={() => setShowDevInfo(false)}
       />
 
-      <NoticesModal 
-        visible={showNoticesModal} 
-        onClose={() => setShowNoticesModal(false)} 
+      <NoticesModal
+        visible={showNoticesModal}
+        onClose={() => setShowNoticesModal(false)}
       />
       <NoticePopup />
     </Container>

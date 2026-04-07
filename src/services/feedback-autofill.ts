@@ -230,11 +230,39 @@ const applyQuestionDefaults = (
     checkboxGroupsFilled += 1;
   }
 
+  const selects = querySelectorAll(form, "select[name]").filter(
+    (node) => !isDisabledField(node),
+  );
+  for (const select of selects) {
+    const name = getAttr(select, "name");
+    if (!name) continue;
+
+    const options = querySelectorAll(select, "option");
+    if (options.length === 0) continue;
+
+    const preferredOption =
+      options.find(
+        (option) => (getAttr(option, "value") || "") === defaultGrade,
+      ) ||
+      options.find((option) => {
+        const value = (getAttr(option, "value") || "").trim();
+        return value.length > 0;
+      }) ||
+      options[0];
+
+    const selectedValue = getAttr(preferredOption, "value") || "";
+    params.set(name, selectedValue);
+  }
+
   const textFields = [
     ...querySelectorAll(form, "textarea[name]"),
     ...querySelectorAll(
       form,
       "input[type='text'][name], input:not([type])[name]",
+    ),
+    ...querySelectorAll(
+      form,
+      "input[type='email'][name], input[type='search'][name], input[type='number'][name], input[type='tel'][name], input[type='url'][name]",
     ),
   ].filter(
     (node) => !isDisabledField(node) && getAttr(node, "readonly") === null,
@@ -244,7 +272,9 @@ const applyQuestionDefaults = (
   for (const field of textFields) {
     const name = getAttr(field, "name");
     if (!name) continue;
-    const existing = getAttr(field, "value") || "";
+    const tag = (field.tagName || "").toLowerCase();
+    const existing =
+      tag === "textarea" ? getText(field) : getAttr(field, "value") || "";
     const value = existing.trim() || defaultTextResponse;
     params.set(name, value);
     if (!existing.trim()) {
@@ -270,6 +300,12 @@ const findQuestionForm = (html: string): Element | null => {
       querySelector(form, "input[type='checkbox'][name]") !== null ||
       querySelector(form, "textarea[name]") !== null ||
       querySelector(form, "input[type='text'][name]") !== null ||
+      querySelector(form, "input[type='email'][name]") !== null ||
+      querySelector(form, "input[type='search'][name]") !== null ||
+      querySelector(form, "input[type='number'][name]") !== null ||
+      querySelector(form, "input[type='tel'][name]") !== null ||
+      querySelector(form, "input[type='url'][name]") !== null ||
+      querySelector(form, "select[name]") !== null ||
       querySelector(form, "input:not([type])[name]") !== null;
     const hasSubmit =
       querySelector(form, "button[type='submit'], input[type='submit']") !==
@@ -292,7 +328,15 @@ const findConfirmationForm = (html: string): Element | null => {
     const hasQuestions =
       querySelector(form, "input[type='radio'][name]") !== null ||
       querySelector(form, "input[type='checkbox'][name]") !== null ||
-      querySelector(form, "textarea[name]") !== null;
+      querySelector(form, "textarea[name]") !== null ||
+      querySelector(form, "input[type='text'][name]") !== null ||
+      querySelector(form, "input[type='email'][name]") !== null ||
+      querySelector(form, "input[type='search'][name]") !== null ||
+      querySelector(form, "input[type='number'][name]") !== null ||
+      querySelector(form, "input[type='tel'][name]") !== null ||
+      querySelector(form, "input[type='url'][name]") !== null ||
+      querySelector(form, "select[name]") !== null ||
+      querySelector(form, "input:not([type])[name]") !== null;
     if (hasSubmit && !hasQuestions) {
       return form;
     }
@@ -336,7 +380,15 @@ const isFeedbackForm = (form: Element): boolean => {
   const hasQuestionFields =
     querySelector(form, "input[type='radio'][name]") !== null ||
     querySelector(form, "input[type='checkbox'][name]") !== null ||
-    querySelector(form, "textarea[name]") !== null;
+    querySelector(form, "textarea[name]") !== null ||
+    querySelector(form, "input[type='text'][name]") !== null ||
+    querySelector(form, "input[type='email'][name]") !== null ||
+    querySelector(form, "input[type='search'][name]") !== null ||
+    querySelector(form, "input[type='number'][name]") !== null ||
+    querySelector(form, "input[type='tel'][name]") !== null ||
+    querySelector(form, "input[type='url'][name]") !== null ||
+    querySelector(form, "select[name]") !== null ||
+    querySelector(form, "input:not([type])[name]") !== null;
   return hasQuestionFields && (hasFeedbackAction || hasSubmitValues);
 };
 
@@ -450,6 +502,124 @@ const withRetries = async <T>(
     : new Error(`${contextLabel} failed after retries`);
 };
 
+type FeedbackProcessingResult =
+  | { kind: "ok"; fillResult: FillResult }
+  | { kind: "inaccessible" }
+  | { kind: "error"; message: string };
+
+const processSingleFeedbackLink = async (
+  feedbackUrl: string,
+  gradeForCourse: string,
+  textForCourse: string,
+  submit: boolean,
+): Promise<FeedbackProcessingResult> => {
+  try {
+    const feedbackPage = await withRetries(
+      () => api.get<string>(feedbackUrl),
+      `load feedback page ${feedbackUrl}`,
+    );
+    if (isLoginHtml(feedbackPage.data)) {
+      throw new Error("Session expired while opening feedback page");
+    }
+
+    const completionUrl = resolveCompletionUrl(feedbackUrl, feedbackPage.data);
+    const preferredCompletionUrl =
+      completionUrl === feedbackUrl
+        ? fallbackCompletionUrl(feedbackUrl)
+        : completionUrl;
+
+    const completionPage =
+      preferredCompletionUrl === feedbackUrl
+        ? feedbackPage
+        : await withRetries(
+            () => api.get<string>(preferredCompletionUrl),
+            `load completion page ${preferredCompletionUrl}`,
+          );
+
+    if (isLoginHtml(completionPage.data)) {
+      throw new Error("Session expired while opening feedback form");
+    }
+
+    const fillResult = await withRetries(
+      () =>
+        submitFeedbackForm(
+          preferredCompletionUrl,
+          completionPage.data,
+          gradeForCourse,
+          textForCourse,
+          submit,
+        ),
+      `submit feedback form ${preferredCompletionUrl}`,
+    );
+
+    return { kind: "ok", fillResult };
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return { kind: "inaccessible" };
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    return { kind: "error", message };
+  }
+};
+
+const retryInaccessibleFeedbackLink = async (
+  courseUrl: string,
+  courseId: string,
+  feedbackUrl: string,
+  gradeForCourse: string,
+  textForCourse: string,
+  submit: boolean,
+): Promise<FeedbackProcessingResult> => {
+  const recoveryBackoffMs = [1200, 2400, 4800];
+
+  for (const delayMs of recoveryBackoffMs) {
+    await wait(delayMs);
+    await refreshAuthSession();
+
+    try {
+      const refreshedCoursePage = await withRetries(
+        () => api.get<string>(courseUrl),
+        `refresh course page ${courseUrl}`,
+      );
+
+      if (isLoginHtml(refreshedCoursePage.data)) {
+        continue;
+      }
+      if (isEnrollmentOptionsPage(refreshedCoursePage.data)) {
+        return { kind: "inaccessible" };
+      }
+
+      const refreshedLinks = collectFeedbackLinks(
+        refreshedCoursePage.data,
+        courseId,
+      );
+
+      if (!refreshedLinks.includes(feedbackUrl)) {
+        return { kind: "inaccessible" };
+      }
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return { kind: "inaccessible" };
+      }
+      continue;
+    }
+
+    const retryResult = await processSingleFeedbackLink(
+      feedbackUrl,
+      gradeForCourse,
+      textForCourse,
+      submit,
+    );
+
+    if (retryResult.kind !== "inaccessible") {
+      return retryResult;
+    }
+  }
+
+  return { kind: "inaccessible" };
+};
+
 export const runLmsFeedbackAutofill = async (
   options: FeedbackAutofillOptions,
 ): Promise<FeedbackAutofillReport> => {
@@ -560,78 +730,57 @@ export const runLmsFeedbackAutofill = async (
       report.feedbackLinksDiscovered += feedbackLinks.length;
 
       for (const feedbackUrl of feedbackLinks) {
-        try {
-          report.feedbackFormsVisited += 1;
-          const feedbackPage = await withRetries(
-            () => api.get<string>(feedbackUrl),
-            `load feedback page ${feedbackUrl}`,
-          );
-          if (isLoginHtml(feedbackPage.data)) {
-            throw new Error("Session expired while opening feedback page");
-          }
+        report.feedbackFormsVisited += 1;
 
-          const completionUrl = resolveCompletionUrl(
+        let result = await processSingleFeedbackLink(
+          feedbackUrl,
+          gradeForCourse,
+          textForCourse,
+          submit,
+        );
+
+        if (result.kind === "inaccessible") {
+          result = await retryInaccessibleFeedbackLink(
+            entry.url,
+            courseId,
             feedbackUrl,
-            feedbackPage.data,
+            gradeForCourse,
+            textForCourse,
+            submit,
           );
-          const preferredCompletionUrl =
-            completionUrl === feedbackUrl
-              ? fallbackCompletionUrl(feedbackUrl)
-              : completionUrl;
+        }
 
-          const completionPage =
-            preferredCompletionUrl === feedbackUrl
-              ? feedbackPage
-              : await withRetries(
-                  () => api.get<string>(preferredCompletionUrl),
-                  `load completion page ${preferredCompletionUrl}`,
-                );
-
-          if (isLoginHtml(completionPage.data)) {
-            throw new Error("Session expired while opening feedback form");
-          }
-
-          const fillResult = await withRetries(
-            () =>
-              submitFeedbackForm(
-                preferredCompletionUrl,
-                completionPage.data,
-                gradeForCourse,
-                textForCourse,
-                submit,
-              ),
-            `submit feedback form ${preferredCompletionUrl}`,
+        if (result.kind === "inaccessible") {
+          report.formsSkippedNotAccessible += 1;
+          debug.scraper(
+            `[feedback-autofill] Skipping inaccessible feedback ${feedbackUrl}`,
           );
+          continue;
+        }
 
-          if (!fillResult.hadQuestions) {
-            report.formsSkippedNoQuestions += 1;
-            continue;
-          }
+        if (result.kind === "error") {
+          report.errors.push(`${feedbackUrl}: ${result.message}`);
+          continue;
+        }
 
-          if (
-            fillResult.radioGroupsFilled > 0 ||
-            fillResult.checkboxGroupsFilled > 0 ||
-            fillResult.textFieldsFilled > 0
-          ) {
-            report.formsAttempted += 1;
-            report.radioGroupsFilled += fillResult.radioGroupsFilled;
-            report.checkboxGroupsFilled += fillResult.checkboxGroupsFilled;
-            report.textFieldsFilled += fillResult.textFieldsFilled;
-            if (fillResult.submitted) {
-              report.formsSubmitted += 1;
-            }
+        const fillResult = result.fillResult;
+        if (!fillResult.hadQuestions) {
+          report.formsSkippedNoQuestions += 1;
+          continue;
+        }
+
+        if (
+          fillResult.radioGroupsFilled > 0 ||
+          fillResult.checkboxGroupsFilled > 0 ||
+          fillResult.textFieldsFilled > 0
+        ) {
+          report.formsAttempted += 1;
+          report.radioGroupsFilled += fillResult.radioGroupsFilled;
+          report.checkboxGroupsFilled += fillResult.checkboxGroupsFilled;
+          report.textFieldsFilled += fillResult.textFieldsFilled;
+          if (fillResult.submitted) {
+            report.formsSubmitted += 1;
           }
-        } catch (error) {
-          if (isNotFoundError(error)) {
-            report.formsSkippedNotAccessible += 1;
-            debug.scraper(
-              `[feedback-autofill] Skipping inaccessible feedback ${feedbackUrl}`,
-            );
-            continue;
-          }
-          const message =
-            error instanceof Error ? error.message : String(error);
-          report.errors.push(`${feedbackUrl}: ${message}`);
         }
       }
     } catch (error) {
