@@ -1,4 +1,4 @@
-import type { ModuleVisual } from "../types/visual-types";
+import type { ModuleVisual } from "@/course/types/visual-types";
 
 export const MODULE_VISUALS: Record<string, ModuleVisual> = {
   forum: {

@@ -46,12 +46,15 @@ const extractSeenPopupIds = (value: unknown): string[] | null => {
 
 interface PopupState {
   seenPopupIds: string[];
+  feedbackDefaultGrade: string;
+  feedbackDefaultTextResponse: string;
   hasHydrated: boolean;
   markAsSeen: (id: string) => void;
   markAllAsSeen: () => void;
   clearSeenPopups: () => void;
   hasUnseenPopups: () => boolean;
   getUnseenPopups: () => typeof POPUP_NOTICES;
+  setFeedbackAutofillDefaults: (grade: string, textResponse: string) => void;
   setHasHydrated: (hasHydrated: boolean) => void;
 }
 
@@ -59,6 +62,8 @@ export const usePopupStore = create<PopupState>()(
   persist(
     (set, get) => ({
       seenPopupIds: [],
+      feedbackDefaultGrade: "3",
+      feedbackDefaultTextResponse: "_",
       hasHydrated: false,
 
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
@@ -95,7 +100,20 @@ export const usePopupStore = create<PopupState>()(
       getUnseenPopups: () => {
         const { hasHydrated, seenPopupIds } = get();
         if (!hasHydrated) return [];
-        return POPUP_NOTICES.filter((popup) => !seenPopupIds.includes(popup.id));
+        return POPUP_NOTICES.filter(
+          (popup) => !seenPopupIds.includes(popup.id),
+        );
+      },
+
+      setFeedbackAutofillDefaults: (grade: string, textResponse: string) => {
+        const trimmedGrade = grade.trim();
+        const safeGrade = /^[0-5]$/.test(trimmedGrade) ? trimmedGrade : "3";
+        const safeText = textResponse.trim() || "_";
+
+        set({
+          feedbackDefaultGrade: safeGrade,
+          feedbackDefaultTextResponse: safeText,
+        });
       },
     }),
     {
@@ -123,10 +141,14 @@ export const usePopupStore = create<PopupState>()(
         setItem: (name, value) => zustandStorage.setItem(name, value),
         removeItem: (name) => zustandStorage.removeItem(name),
       })),
-      partialize: (state) => ({ seenPopupIds: state.seenPopupIds }),
+      partialize: (state) => ({
+        seenPopupIds: state.seenPopupIds,
+        feedbackDefaultGrade: state.feedbackDefaultGrade,
+        feedbackDefaultTextResponse: state.feedbackDefaultTextResponse,
+      }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
-    }
-  )
+    },
+  ),
 );

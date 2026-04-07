@@ -6,7 +6,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/stores/auth-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
-import { ToastProviderWithViewport } from "@/components";
+import { ToastProviderWithViewport } from "@/components/shared/ui/molecules/toast";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   DarkTheme,
@@ -160,7 +160,9 @@ export default function RootLayout() {
                   className="absolute self-center flex-row items-center gap-1.5 rounded-full border px-3 py-1.5 shadow-sm"
                   style={{
                     top: insets.top + 10,
-                    backgroundColor: isDark ? Colors.gray[900] : Colors.gray[100],
+                    backgroundColor: isDark
+                      ? Colors.gray[900]
+                      : Colors.gray[100],
                     borderColor: Colors.status.warning,
                   }}
                 >
@@ -171,7 +173,9 @@ export default function RootLayout() {
                   />
                   <Text
                     className="text-[12px] font-semibold tracking-[0.2px]"
-                    style={{ color: isDark ? Colors.gray[100] : Colors.gray[800] }}
+                    style={{
+                      color: isDark ? Colors.gray[100] : Colors.gray[800],
+                    }}
                   >
                     Offline - showing cached data
                   </Text>
@@ -184,4 +188,3 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
-

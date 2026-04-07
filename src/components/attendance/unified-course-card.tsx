@@ -1,5 +1,5 @@
 import { SwipeableBunkItem } from "@/components/attendance/swipeable-bunk-item";
-import { Toast } from "@/components";
+import { Toast } from "@/components/shared/ui/molecules/toast";
 import { GradientCard } from "@/components/ui/gradient-card";
 import { CalendarTheme, Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -120,7 +120,7 @@ const getStatusColor = (status: AttendanceStatus): string => {
   }
 };
 
-// calendar marks absence dates (red dots), list filtering remains DL-only
+// calendar marks absence + unresolved unknown dates, list filtering remains DL-only
 const buildMarkedDates = (
   records: AttendanceRecord[],
   bunks: BunkRecord[],
@@ -146,7 +146,6 @@ const buildMarkedDates = (
 
   for (const record of records) {
     if (
-      record.status === "Unknown" ||
       record.status === "Present" ||
       record.status === "Late" ||
       record.status === "Excused"
@@ -179,7 +178,9 @@ const buildMarkedDates = (
 };
 
 const getMostRecentDate = (records: AttendanceRecord[]): string | null => {
-  const filtered = records.filter((record) => record.status === "Absent");
+  const filtered = records.filter(
+    (record) => record.status === "Absent" || record.status === "Unknown",
+  );
   let mostRecent: string | null = null;
   let mostRecentTime = 0;
   for (const record of filtered) {
@@ -695,6 +696,18 @@ export function UnifiedCourseCard({
                 style={{ color: theme.textSecondary }}
               >
                 A
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-1">
+              <View
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: Colors.status.unknown }}
+              />
+              <Text
+                className="text-[10px]"
+                style={{ color: theme.textSecondary }}
+              >
+                ?
               </Text>
             </View>
             <View className="flex-row items-center gap-1">

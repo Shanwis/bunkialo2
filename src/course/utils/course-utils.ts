@@ -1,8 +1,8 @@
 import { Colors } from "@/constants/theme";
 import type { LmsResourceItemNode, LmsResourceSectionNode } from "@/types";
-import { MODULE_VISUALS } from "../constants/module-visuals";
-import { SECTION_TONES } from "../constants/section-tones";
-import type { ModuleVisual, Tone } from "../types/visual-types";
+import { MODULE_VISUALS } from "@/course/constants/module-visuals";
+import { SECTION_TONES } from "@/course/constants/section-tones";
+import type { ModuleVisual, Tone } from "@/course/types/visual-types";
 
 export const formatSyncTime = (timestamp: number | null): string => {
   if (!timestamp) return "Never";

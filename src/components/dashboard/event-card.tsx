@@ -1,8 +1,8 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { resolveDashboardEventRoute } from "@/app/course/utils/event-route";
+import { resolveDashboardEventRoute } from "@/course/utils/event-route";
 import { useBunkStore } from "@/stores/bunk-store";
-import { Toast } from "@/components";
+import { Toast } from "@/components/shared/ui/molecules/toast";
 import type { TimelineEvent } from "@/types";
 import { extractCourseName } from "@/utils/course-name";
 import { Ionicons } from "@expo/vector-icons";

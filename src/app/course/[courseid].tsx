@@ -1,4 +1,4 @@
-import { Toast } from "@/components";
+import { Toast } from "@/components/shared/ui/molecules/toast";
 import { Container } from "@/components/ui/container";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -37,8 +37,8 @@ import {
   resolveCourseColorFallback,
   sectionNodeKey,
   toRgba,
-} from "./utils/course-utils";
-import { parseAssignmentIdFromUrl } from "./utils/event-route";
+} from "@/course/utils/course-utils";
+import { parseAssignmentIdFromUrl } from "@/course/utils/event-route";
 
 const ANNOUNCEMENT_FORUM_MATCHERS = [
   "announcement",

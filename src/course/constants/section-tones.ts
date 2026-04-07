@@ -1,4 +1,4 @@
-import type { ThemedTone } from "../types/visual-types";
+import type { ThemedTone } from "@/course/types/visual-types";
 
 export const SECTION_TONES: ThemedTone[] = [
   {

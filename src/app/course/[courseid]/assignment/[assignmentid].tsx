@@ -1,4 +1,4 @@
-import { Toast } from "@/components";
+import { Toast } from "@/components/shared/ui/molecules/toast";
 import { Container } from "@/components/ui/container";
 import { ASSIGNMENT_STALE_MS } from "@/constants/assignment";
 import { Colors } from "@/constants/theme";
@@ -20,14 +20,14 @@ import {
   ScrollView,
   Text,
   TextInput,
+  Platform,
   View,
 } from "react-native";
-import { formatSyncTime } from "../../utils/course-utils";
+import { formatSyncTime } from "@/course/utils/course-utils";
 import { downloadLmsResourceWithSession } from "@/services/lms-download";
 import { getContentUriAsync } from "expo-file-system/legacy";
 import { startActivityAsync } from "expo-intent-launcher";
 import { isAvailableAsync, shareAsync } from "expo-sharing";
-import { Platform } from "react-native";
 import { debug } from "@/utils/debug";
 
 const formatDateTime = (timestamp: number | null): string => {

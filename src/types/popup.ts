@@ -9,6 +9,8 @@ export type PopupIconType =
   | "school"
   | "star";
 
+export type PopupCtaAction = "copy-lms-feedback-autofill";
+
 export interface PopupNotice {
   id: string;
   title: string;
@@ -17,4 +19,6 @@ export interface PopupNotice {
   icon?: PopupIconType;
   iconColor?: string;
   isImportant?: boolean;
+  ctaLabel?: string;
+  ctaAction?: PopupCtaAction;
 }

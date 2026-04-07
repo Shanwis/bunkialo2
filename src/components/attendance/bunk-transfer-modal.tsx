@@ -2,7 +2,7 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useBunkStore } from "@/stores/bunk-store";
 import type { CourseBunkData } from "@/types";
-import { Toast } from "@/components";
+import { Toast } from "@/components/shared/ui/molecules/toast";
 import {
   buildBunkTransferRows,
   normalizeSlot,
@@ -114,7 +114,10 @@ export const BunkTransferModal = ({
       >
         <View
           className="h-9 w-9 items-center justify-center rounded-xl border"
-          style={{ borderColor: theme.border, backgroundColor: theme.background }}
+          style={{
+            borderColor: theme.border,
+            backgroundColor: theme.background,
+          }}
         >
           {props.loading ? (
             <ActivityIndicator size="small" color={theme.textSecondary} />
@@ -122,14 +125,20 @@ export const BunkTransferModal = ({
             <Ionicons name={props.icon} size={18} color={theme.textSecondary} />
           )}
         </View>
-        <Text className="text-[14px] font-semibold" style={{ color: theme.text }}>
+        <Text
+          className="text-[14px] font-semibold"
+          style={{ color: theme.text }}
+        >
           {props.title}
         </Text>
       </Pressable>
     );
   };
 
-  const rows = useMemo(() => buildBunkTransferRows(courses, scope), [courses, scope]);
+  const rows = useMemo(
+    () => buildBunkTransferRows(courses, scope),
+    [courses, scope],
+  );
   const rowCountLabel = useMemo(() => {
     if (rows.length === 0) return "No rows";
     if (rows.length === 1) return "1 row";
@@ -265,12 +274,22 @@ export const BunkTransferModal = ({
     const courseNameMap = getCourseNameMap();
 
     type ImportOp =
-      | { kind: "create"; courseId: string; rowType: "DL" | "BUNK"; dateIso: string; slot: string }
+      | {
+          kind: "create";
+          courseId: string;
+          rowType: "DL" | "BUNK";
+          dateIso: string;
+          slot: string;
+        }
       | { kind: "mark-dl"; courseId: string; bunkId: string }
       | { kind: "remove-dl"; courseId: string; bunkId: string };
 
     const ops: ImportOp[] = [];
-    const destructiveRemovals: { courseName: string; date: string; slot: string }[] = [];
+    const destructiveRemovals: {
+      courseName: string;
+      date: string;
+      slot: string;
+    }[] = [];
 
     for (const row of parsedRows) {
       const course = courseNameMap.get(row.courseName.toLowerCase());
@@ -300,7 +319,11 @@ export const BunkTransferModal = ({
       const shouldBeDl = scope === "duty-leave" ? true : row.type === "DL";
 
       if (shouldBeDl) {
-        ops.push({ kind: "mark-dl", courseId: course.courseId, bunkId: targetBunk.id });
+        ops.push({
+          kind: "mark-dl",
+          courseId: course.courseId,
+          bunkId: targetBunk.id,
+        });
       } else {
         // Potentially destructive: removing existing DL markings.
         if (targetBunk.isDutyLeave) {
@@ -310,7 +333,11 @@ export const BunkTransferModal = ({
             slot: row.slot,
           });
         }
-        ops.push({ kind: "remove-dl", courseId: course.courseId, bunkId: targetBunk.id });
+        ops.push({
+          kind: "remove-dl",
+          courseId: course.courseId,
+          bunkId: targetBunk.id,
+        });
       }
     }
 
@@ -352,7 +379,10 @@ export const BunkTransferModal = ({
       if (matchedCount === 0) {
         showToast("No matching bunks found.", "info");
       } else if (createdCount > 0) {
-        showToast(`Imported ${matchedCount} rows (created ${createdCount}).`, "success");
+        showToast(
+          `Imported ${matchedCount} rows (created ${createdCount}).`,
+          "success",
+        );
       } else {
         showToast(`Imported ${matchedCount} rows.`, "success");
       }
@@ -410,21 +440,33 @@ export const BunkTransferModal = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <Pressable
         className="flex-1 justify-end"
-        style={{ backgroundColor: isDark ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.45)" }}
+        style={{
+          backgroundColor: isDark ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.45)",
+        }}
         onPress={onClose}
       >
         <Pressable
           className="max-h-[90%] overflow-hidden rounded-t-[28px] border px-4 pt-3 pb-6"
-          style={{ backgroundColor: theme.background, borderColor: theme.border }}
+          style={{
+            backgroundColor: theme.background,
+            borderColor: theme.border,
+          }}
           onPress={(event) => event.stopPropagation()}
         >
           <View className="items-center">
             <View
               className="mb-3 h-1.5 w-10 rounded-full"
-              style={{ backgroundColor: isDark ? Colors.gray[700] : Colors.gray[300] }}
+              style={{
+                backgroundColor: isDark ? Colors.gray[700] : Colors.gray[300],
+              }}
             />
           </View>
 
@@ -433,19 +475,32 @@ export const BunkTransferModal = ({
               <View className="flex-row items-center gap-2">
                 <View
                   className="h-9 w-9 items-center justify-center rounded-xl border"
-                  style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}
+                  style={{
+                    borderColor: theme.border,
+                    backgroundColor: theme.backgroundSecondary,
+                  }}
                 >
                   <Ionicons
-                    name={scope === "duty-leave" ? "briefcase-outline" : "calendar-outline"}
+                    name={
+                      scope === "duty-leave"
+                        ? "briefcase-outline"
+                        : "calendar-outline"
+                    }
                     size={18}
                     color={accent}
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[16px] font-semibold" style={{ color: theme.text }}>
+                  <Text
+                    className="text-[16px] font-semibold"
+                    style={{ color: theme.text }}
+                  >
                     {title}
                   </Text>
-                  <Text className="text-[12px]" style={{ color: theme.textSecondary }}>
+                  <Text
+                    className="text-[12px]"
+                    style={{ color: theme.textSecondary }}
+                  >
                     {subtitle}
                   </Text>
                 </View>
@@ -456,7 +511,10 @@ export const BunkTransferModal = ({
               onPress={onClose}
               hitSlop={10}
               className="h-10 w-10 items-center justify-center rounded-xl border"
-              style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.backgroundSecondary,
+              }}
             >
               <Ionicons name="close" size={18} color={theme.textSecondary} />
             </Pressable>
@@ -469,21 +527,30 @@ export const BunkTransferModal = ({
           >
             <View
               className="flex-row rounded-2xl border p-1"
-              style={{ borderColor: theme.border, backgroundColor: theme.backgroundSecondary }}
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.backgroundSecondary,
+              }}
             >
               <Pressable
                 onPress={() => setActiveSubTab("export")}
                 className="flex-1 items-center justify-center rounded-xl py-2.5"
                 style={
                   activeSubTab === "export"
-                    ? { backgroundColor: theme.background, borderColor: theme.border }
+                    ? {
+                        backgroundColor: theme.background,
+                        borderColor: theme.border,
+                      }
                     : undefined
                 }
               >
                 <Text
                   className="text-[13px] font-semibold"
                   style={{
-                    color: activeSubTab === "export" ? theme.text : theme.textSecondary,
+                    color:
+                      activeSubTab === "export"
+                        ? theme.text
+                        : theme.textSecondary,
                   }}
                 >
                   Export
@@ -496,14 +563,20 @@ export const BunkTransferModal = ({
                   className="flex-1 items-center justify-center rounded-xl py-2.5"
                   style={
                     activeSubTab === "import"
-                      ? { backgroundColor: theme.background, borderColor: theme.border }
+                      ? {
+                          backgroundColor: theme.background,
+                          borderColor: theme.border,
+                        }
                       : undefined
                   }
                 >
                   <Text
                     className="text-[13px] font-semibold"
                     style={{
-                      color: activeSubTab === "import" ? theme.text : theme.textSecondary,
+                      color:
+                        activeSubTab === "import"
+                          ? theme.text
+                          : theme.textSecondary,
                     }}
                   >
                     Import
