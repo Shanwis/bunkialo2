@@ -1,4 +1,4 @@
-## Summary
+## Summary (what the feature is and the motivation behind it)
 
 ## Changes
 
@@ -9,5 +9,6 @@
 ## Risks
 
 ## Checklist
+- [ ] Attached relevant screenshots/screen recordings if relevant
 - [ ] No secrets committed
 - [ ] Docs updated if needed

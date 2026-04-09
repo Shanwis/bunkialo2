@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-import { SelectionModal } from "@/components/modals/selection-modal";
 import { Toast } from "@/components/shared/ui/molecules/toast";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -118,6 +118,7 @@ export function FeedbackAutofillPopupContent({
           contentContainerStyle={{ paddingBottom: 4 }}
           keyboardShouldPersistTaps="always"
           nestedScrollEnabled
+          onScrollBeginDrag={() => setGradePickerCourseId(null)}
         >
           {attendanceCourses.map((course) => {
             const pref = courseDefaults[course.courseId] ?? {
@@ -126,7 +127,13 @@ export function FeedbackAutofillPopupContent({
             };
 
             return (
-              <View key={course.courseId} className="mt-2 gap-1">
+              <View
+                key={course.courseId}
+                className="relative mt-2 gap-1"
+                style={{
+                  zIndex: gradePickerCourseId === course.courseId ? 30 : 1,
+                }}
+              >
                 <Text
                   className="text-[12px] font-semibold"
                   style={{ color: theme.textSecondary }}
@@ -136,8 +143,12 @@ export function FeedbackAutofillPopupContent({
                 </Text>
                 <View className="flex-row gap-2">
                   <Pressable
-                    onPress={() => setGradePickerCourseId(course.courseId)}
-                    className="w-16 items-center justify-center rounded-xl border px-2 py-2.5"
+                    onPress={() =>
+                      setGradePickerCourseId((prev) =>
+                        prev === course.courseId ? null : course.courseId,
+                      )
+                    }
+                    className="w-[72px] flex-row items-center justify-center gap-1 rounded-xl border px-2 py-2.5"
                     style={{
                       borderColor: theme.border,
                       backgroundColor: theme.backgroundSecondary,
@@ -149,6 +160,15 @@ export function FeedbackAutofillPopupContent({
                     >
                       {pref.grade || "3"}
                     </Text>
+                    <Ionicons
+                      name={
+                        gradePickerCourseId === course.courseId
+                          ? "chevron-up"
+                          : "chevron-down"
+                      }
+                      size={14}
+                      color={theme.textSecondary}
+                    />
                   </Pressable>
                   <TextInput
                     value={pref.textResponse}
@@ -169,34 +189,58 @@ export function FeedbackAutofillPopupContent({
                     }}
                   />
                 </View>
+
+                {gradePickerCourseId === course.courseId && (
+                  <View
+                    className="absolute left-0 top-[44px] w-[72px] rounded-xl border p-1"
+                    style={{
+                      borderColor: theme.border,
+                      backgroundColor: theme.background,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.16,
+                      shadowRadius: 12,
+                      elevation: 12,
+                    }}
+                  >
+                    {["5", "4", "3", "2", "1", "0"].map((value) => {
+                      const selected = (pref.grade || "3") === value;
+                      return (
+                        <Pressable
+                          key={value}
+                          onPress={() => {
+                            setCourseDefault(
+                              course.courseId,
+                              value,
+                              pref.textResponse,
+                            );
+                            setGradePickerCourseId(null);
+                          }}
+                          className="items-center rounded-md py-1.5"
+                          style={{
+                            backgroundColor: selected
+                              ? Colors.accent
+                              : "transparent",
+                          }}
+                        >
+                          <Text
+                            className="text-[13px] font-semibold"
+                            style={{
+                              color: selected ? Colors.white : theme.text,
+                            }}
+                          >
+                            {value}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             );
           })}
         </ScrollView>
       </View>
-
-      <SelectionModal
-        visible={gradePickerCourseId !== null}
-        title="Select score"
-        message="Pick score for this course"
-        icon="options-outline"
-        options={["5", "4", "3", "2", "1", "0"].map((value) => ({
-          label: value,
-          value,
-        }))}
-        selectedValue={
-          gradePickerCourseId
-            ? (courseDefaults[gradePickerCourseId]?.grade ?? "3")
-            : "3"
-        }
-        onClose={() => setGradePickerCourseId(null)}
-        onSelect={(value) => {
-          if (!gradePickerCourseId) return;
-          const currentText =
-            courseDefaults[gradePickerCourseId]?.textResponse ?? "_";
-          setCourseDefault(gradePickerCourseId, String(value), currentText);
-        }}
-      />
 
       {isRunningAutofill && (
         <View
