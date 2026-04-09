@@ -2,6 +2,7 @@ import type { TimelineEvent } from "@/types";
 import { debug } from "@/utils/debug";
 import { api } from "./api";
 import { dedupeTimelineEvents } from "./dashboard-event-utils";
+import { getSesskey } from "./sesskey";
 
 interface MoodleTimelineResponse {
   error: boolean;
@@ -12,17 +13,6 @@ interface MoodleTimelineResponse {
     lastid: number;
   };
 }
-
-const getSesskey = async (): Promise<string | null> => {
-  const response = await api.get<string>("/my/");
-  const match = response.data.match(/"sesskey":"([^"]+)"/);
-  if (match) {
-    debug.scraper(`Found sesskey: ${match[1]}`);
-    return match[1];
-  }
-  debug.scraper("Sesskey not found");
-  return null;
-};
 
 type ActionEventsByTimesortArgs = {
   limitnum: number;

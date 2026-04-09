@@ -13,20 +13,12 @@ import {
   querySelector,
   querySelectorAll,
 } from "@/utils/html-parser";
+import { isLoginHtml } from "@/utils/moodle-url";
 import type { Element } from "domhandler";
 import { api, BASE_URL } from "./api";
 
 const normalizeText = (value: string): string =>
   value.replace(/\s+/g, " ").trim();
-
-const isLoginHtml = (html: string): boolean => {
-  const normalized = html.replace(/\s+/g, " ");
-  return (
-    normalized.includes('name="logintoken"') ||
-    normalized.includes('id="login"') ||
-    normalized.includes("/login/index.php")
-  );
-};
 
 const toAbsoluteUrl = (href: string): string => {
   if (href.startsWith("http://") || href.startsWith("https://")) {

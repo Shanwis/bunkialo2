@@ -16,22 +16,7 @@ import {
   querySelectorAll,
 } from "@/utils/html-parser";
 import { api, BASE_URL } from "./api";
-
-// Get sesskey from page for API calls
-const getSesskey = async (): Promise<string | null> => {
-  const response = await api.get<string>("/my/");
-
-  // Find sesskey in page - it's in M.cfg.sesskey in a script tag
-  const match = response.data.match(/"sesskey":"([^"]+)"/);
-
-  if (match) {
-    debug.scraper(`Found sesskey: ${match[1]}`);
-    return match[1];
-  }
-
-  debug.scraper("Sesskey not found");
-  return null;
-};
+import { getSesskey } from "./sesskey";
 
 // Fetch courses using Moodle's AJAX API (only "in progress" courses)
 export const fetchCourses = async (): Promise<Course[]> => {

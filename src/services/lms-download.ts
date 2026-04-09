@@ -9,6 +9,7 @@ import type {
   LmsDownloadSuccess,
 } from "@/types";
 import { debug } from "@/utils/debug";
+import { isLoginHtml } from "@/utils/moodle-url";
 import { File, Paths } from "expo-file-system";
 import { fetch as expoFetch } from "expo/fetch";
 
@@ -83,14 +84,6 @@ const toAbsoluteLmsUrl = (url: string): string => {
   return `${baseUrl}/${url.replace(/^\.?\//, "")}`;
 };
 
-const isLoginHtml = (html: string): boolean => {
-  const condensed = html.replace(/\s+/g, " ");
-  return (
-    condensed.includes('name="logintoken"') ||
-    condensed.includes('id="login"') ||
-    condensed.includes("/login/index.php")
-  );
-};
 
 const buildFailure = (
   reason: LmsDownloadFailureReason,

@@ -59,7 +59,10 @@ class CookieStore {
       if (keyLower === "domain") cookie.domain = val?.trim();
       if (keyLower === "path") cookie.path = val?.trim();
       if (keyLower === "expires" && val) {
-        cookie.expires = new Date(val.trim());
+        const parsed = new Date(val.trim());
+        if (!Number.isNaN(parsed.getTime())) {
+          cookie.expires = parsed;
+        }
       }
     }
 
