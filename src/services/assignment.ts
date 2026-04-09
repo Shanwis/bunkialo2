@@ -12,6 +12,7 @@ import type {
 import { debug } from "@/utils/debug";
 import {
   getQueryParamValue,
+  isLoginHtml,
   parseAssignmentIdFromMoodleUrl,
 } from "@/utils/moodle-url";
 import {
@@ -156,15 +157,6 @@ const parseNumberValue = (
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
-};
-
-const isLoginHtml = (html: string): boolean => {
-  const normalized = html.replace(/\s+/g, " ");
-  return (
-    normalized.includes('name="logintoken"') ||
-    normalized.includes('id="login"') ||
-    normalized.includes("/login/index.php")
-  );
 };
 
 const ensureAuthenticatedSession = async (): Promise<boolean> => {

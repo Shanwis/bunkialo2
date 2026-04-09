@@ -13,6 +13,7 @@ import {
   querySelectorAll,
 } from "@/utils/html-parser";
 import { debug } from "@/utils/debug";
+import { isLoginHtml } from "@/utils/moodle-url";
 import type { Element } from "domhandler";
 
 type FeedbackAutofillOptions = {
@@ -58,15 +59,6 @@ type FillResult = {
   radioGroupsFilled: number;
   checkboxGroupsFilled: number;
   textFieldsFilled: number;
-};
-
-const isLoginHtml = (html: string): boolean => {
-  const normalized = html.replace(/\s+/g, " ");
-  return (
-    normalized.includes('name="logintoken"') ||
-    normalized.includes('id="login"') ||
-    normalized.includes("/login/index.php")
-  );
 };
 
 const toAbsoluteUrl = (href: string): string => {

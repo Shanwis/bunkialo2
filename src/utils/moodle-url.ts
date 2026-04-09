@@ -1,5 +1,15 @@
 const ASSIGNMENT_VIEW_PATH = "/mod/assign/view.php";
 
+/** Check if HTML response is a Moodle login page (session expired). */
+export const isLoginHtml = (html: string): boolean => {
+  const normalized = html.replace(/\s+/g, " ");
+  return (
+    normalized.includes('name="logintoken"') ||
+    normalized.includes('id="login"') ||
+    normalized.includes("/login/index.php")
+  );
+};
+
 export const getQueryParamValue = (url: string, key: string): string | null => {
   if (!url) return null;
 
