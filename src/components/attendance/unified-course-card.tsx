@@ -50,10 +50,7 @@ const getCurrentBufferColor = (buffer: number): string => {
   return Colors.status.warning;
 };
 
-const formatSignedMetric = (value: number): string => {
-  if (value > 0) return `+${value}`;
-  return value.toString();
-};
+const formatMetric = (value: number): string => value.toString();
 
 const MONTH_TO_NUMBER: Record<string, string> = {
   jan: "01",
@@ -338,7 +335,7 @@ export function UnifiedCourseCard({
   const showingFullSemMetric = !hasCurrentBuffer || showFullSemMetric;
   const currentMetricDisplay =
     hasCurrentBuffer && currentBuffer !== null
-      ? formatSignedMetric(currentBuffer)
+      ? formatMetric(currentBuffer)
       : heuristicBunksLeft.toString();
   const heuristicMetricDisplay = heuristicBunksLeft.toString();
   const metricDisplay = showingFullSemMetric
