@@ -19,8 +19,8 @@ import {
   getRecordKeyVariants,
 } from "@/utils/attendance-helpers";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import * as Linking from "expo-linking";
+import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Calendar, DateData } from "react-native-calendars";
@@ -43,6 +43,17 @@ interface UnifiedCourseCardProps {
 // 80% threshold
 const getPercentageColor = (percentage: number) =>
   percentage >= 80 ? Colors.status.success : Colors.status.danger;
+
+const getCurrentBufferColor = (buffer: number): string => {
+  if (buffer > 0) return Colors.status.success;
+  if (buffer < 0) return Colors.status.danger;
+  return Colors.status.warning;
+};
+
+const formatSignedMetric = (value: number): string => {
+  if (value > 0) return `+${value}`;
+  return value.toString();
+};
 
 const MONTH_TO_NUMBER: Record<string, string> = {
   jan: "01",
@@ -211,7 +222,7 @@ export function UnifiedCourseCard({
 }: UnifiedCourseCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [showTotal, setShowTotal] = useState(false);
+  const [showFullSemMetric, setShowFullSemMetric] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
@@ -289,7 +300,17 @@ export function UnifiedCourseCard({
   const percentageColor = getPercentageColor(percentage);
 
   // bunk stats
-  const stats = bunkData ? selectCourseStats(bunkData) : null;
+  const stats = bunkData
+    ? selectCourseStats(
+        bunkData,
+        course
+          ? {
+              totalSessions,
+              attendedSessions: attended,
+            }
+          : undefined,
+      )
+    : null;
   const pastBunks = useMemo(
     () => (bunkData ? filterPastBunks(bunkData.bunks) : []),
     [bunkData],
@@ -311,18 +332,46 @@ export function UnifiedCourseCard({
   }, [bunksByDay, pastBunks, selectedDate]);
 
   // bunks display
-  const bunksLeft = stats?.bunksLeft ?? 0;
-  const bunksDisplay = showTotal
-    ? `${stats?.usedBunks ?? 0}/${stats?.totalBunks ?? 0}`
-    : bunksLeft.toString();
-  const bunksLabel = showTotal ? "used" : "left";
-  const bunksColor = !isConfigured
+  const heuristicBunksLeft = stats?.heuristicBunksLeft ?? 0;
+  const hasCurrentBuffer = stats?.bufferTo80Now !== null;
+  const currentBuffer = stats?.bufferTo80Now;
+  const showingFullSemMetric = !hasCurrentBuffer || showFullSemMetric;
+  const currentMetricDisplay =
+    hasCurrentBuffer && currentBuffer !== null
+      ? formatSignedMetric(currentBuffer)
+      : heuristicBunksLeft.toString();
+  const heuristicMetricDisplay = heuristicBunksLeft.toString();
+  const metricDisplay = showingFullSemMetric
+    ? heuristicMetricDisplay
+    : currentMetricDisplay;
+  const heuristicUncertainty = stats?.heuristicUncertainty ?? 1;
+  const heuristicExpandedLabel = hasCurrentBuffer
+    ? `Full sem estimate: ${heuristicBunksLeft}`
+    : null;
+  const heuristicExpandedUncertainty = hasCurrentBuffer
+    ? `±${heuristicUncertainty}`
+    : null;
+  const currentMetricColor = !isConfigured
     ? theme.textSecondary
-    : bunksLeft < 0
+    : hasCurrentBuffer && currentBuffer !== null
+      ? getCurrentBufferColor(currentBuffer)
+      : heuristicBunksLeft < 0
+        ? Colors.status.danger
+        : heuristicBunksLeft <= 3
+          ? Colors.status.warning
+          : Colors.status.success;
+  const heuristicMetricColor = !isConfigured
+    ? theme.textSecondary
+    : heuristicBunksLeft < 0
       ? Colors.status.danger
-      : bunksLeft <= 3
+      : heuristicBunksLeft <= 3
         ? Colors.status.warning
         : Colors.status.success;
+  const metricColor = showingFullSemMetric
+    ? heuristicMetricColor
+    : currentMetricColor;
+  const metricCaption = showingFullSemMetric ? "full sem" : "from 80%";
+  const metricMinWidth = 92;
 
   // calendar data - duty leave dates only
   const markedDates = useMemo(
@@ -346,6 +395,11 @@ export function UnifiedCourseCard({
     setSelectedDate((prev) =>
       prev === day.dateString ? null : day.dateString,
     );
+  };
+
+  const handleMetricPress = () => {
+    if (!hasCurrentBuffer) return;
+    setShowFullSemMetric((prev) => !prev);
   };
 
   const handleOpenLms = () => {
@@ -403,7 +457,7 @@ export function UnifiedCourseCard({
           className="pl-4"
           style={isEditMode ? { opacity: 0.85 } : undefined}
         >
-          <View className="flex-row items-start justify-between gap-3">
+          <View className="flex-row items-start justify-between gap-4">
             <View className="flex-1">
               <Text
                 className="text-base font-semibold"
@@ -494,7 +548,7 @@ export function UnifiedCourseCard({
               </View>
             </View>
 
-            <View className="flex-row items-center gap-2">
+            <View className="flex-row items-start gap-2">
               {!isCustomCourse && course?.courseId && (
                 <Pressable
                   onPress={(e) => {
@@ -547,21 +601,26 @@ export function UnifiedCourseCard({
                 <Pressable
                   onPress={(e) => {
                     e.stopPropagation();
-                    setShowTotal(!showTotal);
+                    handleMetricPress();
+                  }}
+                  className="items-center justify-center rounded-2xl px-3 py-2"
+                  style={{
+                    minWidth: metricMinWidth,
+                    backgroundColor: `${metricColor}12`,
                   }}
                 >
-                  <View className="items-center min-w-[56px]">
+                  <View className="items-center">
                     <Text
-                      className="text-2xl font-bold leading-6"
-                      style={{ color: bunksColor }}
+                      className="text-[28px] font-bold leading-7"
+                      style={{ color: metricColor }}
                     >
-                      {bunksDisplay}
+                      {metricDisplay}
                     </Text>
                     <Text
-                      className="text-[11px] font-medium uppercase tracking-[0.5px]"
+                      className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.8px]"
                       style={{ color: theme.textSecondary }}
                     >
-                      {bunksLabel}
+                      {metricCaption}
                     </Text>
                   </View>
                 </Pressable>
@@ -590,12 +649,16 @@ export function UnifiedCourseCard({
 
               {!isEditMode && (
                 <View
-                  className="items-center justify-center rounded-full h-8 w-8"
-                  style={{ backgroundColor: `${theme.textSecondary}12` }}
+                  className="mt-1 h-9 w-9 items-center justify-center rounded-full"
+                  style={{
+                    backgroundColor: `${theme.textSecondary}10`,
+                    borderWidth: 1,
+                    borderColor: `${theme.textSecondary}10`,
+                  }}
                 >
                   <Ionicons
                     name={expanded ? "chevron-up" : "chevron-down"}
-                    size={18}
+                    size={16}
                     color={theme.textSecondary}
                   />
                 </View>
@@ -610,6 +673,42 @@ export function UnifiedCourseCard({
             className="mb-4 h-px"
             style={{ backgroundColor: theme.border }}
           />
+
+          {heuristicExpandedLabel && heuristicExpandedUncertainty && (
+            <View className="mb-4 items-center">
+              <View
+                className="flex-row items-center gap-2.5 rounded-2xl px-4 py-2"
+                style={{
+                  backgroundColor: `${Colors.status.warning}14`,
+                  borderWidth: 1,
+                  borderColor: `${Colors.status.warning}28`,
+                }}
+              >
+                <Ionicons
+                  name="warning-outline"
+                  size={14}
+                  color={Colors.status.warning}
+                />
+                <Text
+                  className="text-[12px] font-semibold"
+                  style={{ color: theme.text }}
+                >
+                  {heuristicExpandedLabel}
+                </Text>
+                <View
+                  className="rounded-full px-2.5 py-1"
+                  style={{ backgroundColor: `${Colors.status.warning}20` }}
+                >
+                  <Text
+                    className="text-[11px] font-bold"
+                    style={{ color: Colors.status.warning }}
+                  >
+                    {heuristicExpandedUncertainty}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           <Calendar
             markingType="multi-dot"

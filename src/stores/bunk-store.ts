@@ -1,7 +1,9 @@
 import { Colors } from "@/constants/theme";
 import { findCreditsByCode } from "@/data/credits";
 import type {
+  CourseAttendanceSnapshot,
   BunkRecord,
+  CourseBunkStats,
   BunkState,
   CourseBunkData,
   CourseConfig,
@@ -743,7 +745,10 @@ export const selectAllDutyLeaves = (
 };
 
 // selector: calculate bunks stats for a course (past bunks only)
-export const selectCourseStats = (course: CourseBunkData) => {
+export const selectCourseStats = (
+  course: CourseBunkData,
+  attendanceSnapshot?: CourseAttendanceSnapshot,
+): CourseBunkStats => {
   const pastBunks = filterPastBunks(course.bunks);
   const totalBunks = course.config ? 2 * course.config.credits + 1 : 0;
   const dutyLeaveCount = pastBunks.filter((b) => b.isDutyLeave).length;
@@ -753,6 +758,13 @@ export const selectCourseStats = (course: CourseBunkData) => {
     (b) => !b.isDutyLeave && !b.isMarkedPresent,
   ).length;
   const bunksLeft = totalBunks - usedBunks;
+  const requiredFor80Now = attendanceSnapshot
+    ? Math.ceil(attendanceSnapshot.totalSessions * 0.8)
+    : null;
+  const bufferTo80Now =
+    attendanceSnapshot && requiredFor80Now !== null
+      ? attendanceSnapshot.attendedSessions - requiredFor80Now
+      : null;
 
   return {
     totalBunks,
@@ -761,6 +773,10 @@ export const selectCourseStats = (course: CourseBunkData) => {
     usedBunks,
     bunksLeft,
     pastBunksCount: pastBunks.length,
+    requiredFor80Now,
+    bufferTo80Now,
+    heuristicBunksLeft: bunksLeft,
+    heuristicUncertainty: 1,
   };
 };
 

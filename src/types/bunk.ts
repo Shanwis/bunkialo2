@@ -47,6 +47,24 @@ export interface CourseBunkData {
   manualSlots: ManualSlot[];
 }
 
+export interface CourseAttendanceSnapshot {
+  totalSessions: number;
+  attendedSessions: number;
+}
+
+export interface CourseBunkStats {
+  totalBunks: number;
+  dutyLeaveCount: number;
+  markedPresentCount: number;
+  usedBunks: number;
+  bunksLeft: number;
+  pastBunksCount: number;
+  requiredFor80Now: number | null;
+  bufferTo80Now: number | null;
+  heuristicBunksLeft: number;
+  heuristicUncertainty: number;
+}
+
 export interface BunkState {
   courses: CourseBunkData[];
   hiddenCourses: Record<string, HiddenCourseMeta>;
