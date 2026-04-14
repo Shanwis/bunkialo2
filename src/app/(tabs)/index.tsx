@@ -1,22 +1,22 @@
 import { startBackgroundRefresh } from "@/background/dashboard-background";
 import { EventCard } from "@/components/dashboard/event-card";
+import { NoticesModal } from "@/components/dashboard/notices-modal";
+import { NoticePopup } from "@/components/dashboard/popup/notice-popup";
 import { TimelineSection } from "@/components/dashboard/timeline-section";
 import { UpNextSection } from "@/components/dashboard/up-next-section";
-import { NoticePopup } from "@/components/dashboard/popup/notice-popup";
-import { NoticesModal } from "@/components/dashboard/notices-modal";
 import { DevInfoModal } from "@/components/modals/dev-info-modal";
 import { Container } from "@/components/ui/container";
-import { POPUP_NOTICES } from "@/data/popups";
 import { Colors } from "@/constants/theme";
+import { POPUP_NOTICES } from "@/data/popups";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useAuthStore } from "@/stores/auth-store";
 import { useAttendanceStore } from "@/stores/attendance-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { useLmsResourcesStore } from "@/stores/lms-resources-store";
-import { useSettingsStore } from "@/stores/settings-store";
 import { usePopupStore } from "@/stores/popup-store";
-import { scheduleIdleTask } from "@/utils/scheduling";
+import { useSettingsStore } from "@/stores/settings-store";
 import { initializeNotifications } from "@/utils/notifications";
+import { scheduleIdleTask } from "@/utils/scheduling";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
 import { router, useFocusEffect } from "expo-router";
@@ -328,7 +328,7 @@ export default function DashboardScreen() {
             },
           },
         ]
-      : [
+        : [
           {
             icon: "open-in-new",
             label: "Outpass",
@@ -351,6 +351,18 @@ export default function DashboardScreen() {
             onPress: () => {
               setShowFabMenu(false);
               Linking.openURL("https://feaston.iiitkottayam.ac.in/dashboard");
+            },
+          },
+          {
+            icon: "open-in-new",
+            label: "AllPYQ",
+            color: theme.text,
+            style: { backgroundColor: theme.backgroundSecondary },
+            labelStyle: actionLabelStyle,
+            containerStyle: actionContainerStyle,
+            onPress: () => {
+              setShowFabMenu(false);
+              Linking.openURL("https://allpyq.in");
             },
           },
         ]),

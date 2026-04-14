@@ -1,6 +1,14 @@
 import React from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -162,6 +170,22 @@ export function NoticesModal({ visible, onClose }: NoticesModalProps) {
                     {notice.description}
                   </Text>
 
+                  {(notice.imageSourceDark ||
+                    notice.imageSourceLight ||
+                    notice.imageSource) && (
+                    <View className="mt-3">
+                      <Image
+                        source={
+                          isDark
+                            ? notice.imageSourceDark || notice.imageSource
+                            : notice.imageSourceLight || notice.imageSource
+                        }
+                        style={{ width: "100%", height: 76 }}
+                        contentFit="contain"
+                      />
+                    </View>
+                  )}
+
                   {notice.ctaAction === "run-lms-feedback-autofill" && (
                     <Pressable
                       onPress={() => {
@@ -181,6 +205,23 @@ export function NoticesModal({ visible, onClose }: NoticesModalProps) {
                       </Text>
                     </Pressable>
                   )}
+
+                  {notice.ctaAction === "open-url" && notice.ctaUrl ? (
+                    <Pressable
+                      onPress={() => {
+                        void Linking.openURL(notice.ctaUrl);
+                      }}
+                      className="mt-3 items-center rounded-xl px-3 py-2.5"
+                      style={{ backgroundColor: Colors.accent }}
+                    >
+                      <Text
+                        className="text-[13px] font-semibold"
+                        style={{ color: Colors.white }}
+                      >
+                        {notice.ctaLabel || "Open"}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ))
             )}

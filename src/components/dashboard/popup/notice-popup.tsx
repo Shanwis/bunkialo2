@@ -1,13 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Modal, Pressable, Text, View } from "react-native";
+import { Animated, Linking, Modal, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { POPUP_NOTICES } from "@/data/popups";
 import { usePopupStore } from "@/stores/popup-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  hasNotificationPermissions,
+  sendImmediateNotification,
+} from "@/utils/notifications";
 import type { PopupNotice } from "@/types";
 
 function DefaultPopupContent({ popup }: { popup: PopupNotice }) {
@@ -27,7 +33,12 @@ function DefaultPopupContent({ popup }: { popup: PopupNotice }) {
 export function NoticePopup() {
   const hasHydrated = usePopupStore((state) => state.hasHydrated);
   const seenPopupIds = usePopupStore((state) => state.seenPopupIds);
+  const notifiedPopupIds = usePopupStore((state) => state.notifiedPopupIds);
   const markAsSeen = usePopupStore((state) => state.markAsSeen);
+  const markAsNotified = usePopupStore((state) => state.markAsNotified);
+  const notificationsEnabled = useSettingsStore(
+    (state) => state.notificationsEnabled,
+  );
 
   const [currentPopup, setCurrentPopup] = useState<PopupNotice | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -97,9 +108,60 @@ export function NoticePopup() {
     if (modalVisible && currentPopup) animateIn();
   }, [animateIn, currentPopup, modalVisible]);
 
+  useEffect(() => {
+    if (!hasHydrated || !currentPopup) return;
+    if (!notificationsEnabled) return;
+    if (notifiedPopupIds.includes(currentPopup.id)) return;
+
+    void (async () => {
+      const hasPermission = await hasNotificationPermissions();
+      if (!hasPermission) return;
+
+      const notificationBody =
+        currentPopup.id === "allpyq-launch-2026-04"
+          ? "Topic-wise PYQs, trend insights, AI solutions, and adaptive learning guides are now live at allpyq.in."
+          : currentPopup.description;
+
+      const notificationData: Record<string, string> = {
+        type: "notice-popup",
+        popupId: currentPopup.id,
+      };
+
+      if (currentPopup.ctaAction) {
+        notificationData.ctaAction = currentPopup.ctaAction;
+      }
+      if (currentPopup.ctaUrl) {
+        notificationData.ctaUrl = currentPopup.ctaUrl;
+      }
+
+      try {
+        await sendImmediateNotification({
+          title: currentPopup.title,
+          body: notificationBody,
+          channelId: "default",
+          data: notificationData,
+        });
+        markAsNotified(currentPopup.id);
+      } catch {
+        // Prevent notice popup UX from breaking if notification payload fails.
+      }
+    })();
+  }, [
+    currentPopup,
+    hasHydrated,
+    markAsNotified,
+    notificationsEnabled,
+    notifiedPopupIds,
+  ]);
+
   if (!hasHydrated || !currentPopup || !modalVisible) return null;
 
   const CustomContent = currentPopup.customContent;
+  const popupImageSource = isDark
+    ? currentPopup.imageSourceDark || currentPopup.imageSource
+    : currentPopup.imageSourceLight || currentPopup.imageSource;
+  const isOpenUrlPopup =
+    currentPopup.ctaAction === "open-url" && Boolean(currentPopup.ctaUrl);
 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent>
@@ -160,11 +222,39 @@ export function NoticePopup() {
               </Text>
             </View>
 
+            {popupImageSource ? (
+              <View className="mb-4 items-center">
+                <Image
+                  source={popupImageSource}
+                  style={{ width: "100%", height: 120 }}
+                  contentFit="contain"
+                />
+              </View>
+            ) : null}
+
             {CustomContent ? (
               <CustomContent popup={currentPopup} onClose={animateOut} />
             ) : (
               <>
                 <DefaultPopupContent popup={currentPopup} />
+                {isOpenUrlPopup ? (
+                  <Pressable
+                    onPress={() => {
+                      if (!currentPopup.ctaUrl) return;
+                      void Linking.openURL(currentPopup.ctaUrl);
+                      animateOut();
+                    }}
+                    className="mb-3 items-center justify-center rounded-2xl py-3.5 active:opacity-70"
+                    style={{ backgroundColor: Colors.accent }}
+                  >
+                    <Text
+                      className="text-[14px] font-semibold"
+                      style={{ color: Colors.white, letterSpacing: 0.3 }}
+                    >
+                      {currentPopup.ctaLabel || "Open"}
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
                   onPress={animateOut}
                   className="items-center justify-center rounded-2xl py-3.5 active:opacity-70"

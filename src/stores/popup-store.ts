@@ -5,21 +5,21 @@ import { POPUP_NOTICES } from "@/data/popups";
 
 const VALID_POPUP_IDS = new Set(POPUP_NOTICES.map((popup) => popup.id));
 
-const normalizeSeenPopupIds = (value: unknown): string[] => {
+const normalizePopupIds = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
 
-  const seenPopupIds = new Set<string>();
+  const popupIds = new Set<string>();
   for (const item of value) {
     if (typeof item !== "string" || !VALID_POPUP_IDS.has(item)) continue;
-    seenPopupIds.add(item);
+    popupIds.add(item);
   }
 
-  return Array.from(seenPopupIds);
+  return Array.from(popupIds);
 };
 
 const extractSeenPopupIds = (value: unknown): string[] | null => {
   if (Array.isArray(value)) {
-    return normalizeSeenPopupIds(value);
+    return normalizePopupIds(value);
   }
 
   if (!value || typeof value !== "object") {
@@ -34,11 +34,38 @@ const extractSeenPopupIds = (value: unknown): string[] | null => {
   };
 
   if ("seenPopupIds" in candidate) {
-    return normalizeSeenPopupIds(candidate.seenPopupIds);
+    return normalizePopupIds(candidate.seenPopupIds);
   }
 
   if (candidate.state && "seenPopupIds" in candidate.state) {
-    return normalizeSeenPopupIds(candidate.state.seenPopupIds);
+    return normalizePopupIds(candidate.state.seenPopupIds);
+  }
+
+  return null;
+};
+
+const extractNotifiedPopupIds = (value: unknown): string[] | null => {
+  if (Array.isArray(value)) {
+    return [];
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as {
+    notifiedPopupIds?: unknown;
+    state?: {
+      notifiedPopupIds?: unknown;
+    };
+  };
+
+  if ("notifiedPopupIds" in candidate) {
+    return normalizePopupIds(candidate.notifiedPopupIds);
+  }
+
+  if (candidate.state && "notifiedPopupIds" in candidate.state) {
+    return normalizePopupIds(candidate.state.notifiedPopupIds);
   }
 
   return null;
@@ -46,8 +73,10 @@ const extractSeenPopupIds = (value: unknown): string[] | null => {
 
 interface PopupState {
   seenPopupIds: string[];
+  notifiedPopupIds: string[];
   hasHydrated: boolean;
   markAsSeen: (id: string) => void;
+  markAsNotified: (id: string) => void;
   markAsUnseen: (id: string) => void;
   markAllAsSeen: () => void;
   clearSeenPopups: () => void;
@@ -60,6 +89,7 @@ export const usePopupStore = create<PopupState>()(
   persist(
     (set, get) => ({
       seenPopupIds: [],
+      notifiedPopupIds: [],
       hasHydrated: false,
 
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
@@ -73,6 +103,19 @@ export const usePopupStore = create<PopupState>()(
           }
           return {
             seenPopupIds: [...state.seenPopupIds, id],
+          };
+        });
+      },
+
+      markAsNotified: (id: string) => {
+        if (!VALID_POPUP_IDS.has(id)) return;
+
+        set((state) => {
+          if (state.notifiedPopupIds.includes(id)) {
+            return state;
+          }
+          return {
+            notifiedPopupIds: [...state.notifiedPopupIds, id],
           };
         });
       },
@@ -118,9 +161,14 @@ export const usePopupStore = create<PopupState>()(
             const parsed = JSON.parse(value);
 
             const seenPopupIds = extractSeenPopupIds(parsed);
-            if (seenPopupIds !== null) {
+            const notifiedPopupIds = extractNotifiedPopupIds(parsed);
+
+            if (seenPopupIds !== null || notifiedPopupIds !== null) {
               return JSON.stringify({
-                state: { seenPopupIds },
+                state: {
+                  seenPopupIds: seenPopupIds ?? [],
+                  notifiedPopupIds: notifiedPopupIds ?? [],
+                },
                 version: 0,
               });
             }
@@ -135,6 +183,7 @@ export const usePopupStore = create<PopupState>()(
       })),
       partialize: (state) => ({
         seenPopupIds: state.seenPopupIds,
+        notifiedPopupIds: state.notifiedPopupIds,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);

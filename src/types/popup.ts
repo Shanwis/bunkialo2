@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { ImageSourcePropType } from "react-native";
 
 export type PopupIconType =
   | "notifications"
@@ -11,7 +12,7 @@ export type PopupIconType =
   | "school"
   | "star";
 
-export type PopupCtaAction = "run-lms-feedback-autofill";
+export type PopupCtaAction = "run-lms-feedback-autofill" | "open-url";
 
 export interface PopupCustomContentProps {
   popup: PopupNotice;
@@ -24,9 +25,13 @@ export interface PopupNotice {
   description: string;
   timestamp: string; // ISO date string
   icon?: PopupIconType;
+  imageSource?: ImageSourcePropType;
+  imageSourceDark?: ImageSourcePropType;
+  imageSourceLight?: ImageSourcePropType;
   iconColor?: string;
   isImportant?: boolean;
   ctaLabel?: string;
   ctaAction?: PopupCtaAction;
+  ctaUrl?: string;
   customContent?: ComponentType<PopupCustomContentProps>;
 }
